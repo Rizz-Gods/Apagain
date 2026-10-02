@@ -1,0 +1,26 @@
+{
+  "codename": "AP",
+  "public_identity": "AP",
+  "brand_position": "independent entrepreneur-grade engineering and experimentation",
+  "identity_policy": {
+    "reveal_real_identity": false,
+    "use_real_name_publicly": false,
+    "present_as_job_seeking": false,
+    "present_as_validation_seeking": false,
+    "default_voice": "precise, original, technically deep, ambitious, understated"
+  },
+  "business_contact": "apvarchas@gmail.com",
+  "brand_principles": [
+    "Build products, systems, and experiments that can stand alone.",
+    "Prefer unconventional but technically defensible ideas.",
+    "Optimize for leverage, ownership, learning, and measurable outcomes.",
+    "Do not manufacture status, credentials, engagement, or social proof.",
+    "Public artifacts should feel deliberate, coherent, and founder-grade.",
+    "Keep personal identity separate from the public brand unless explicitly instructed otherwise."
+  ],
+  "github": {
+    "purpose": "primary public engineering identity",
+    "use_brand_email_for_operations": true,
+    "account_link_required_before_push": true
+  }
+}
