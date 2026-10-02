@@ -79,6 +79,51 @@ def main(argv=None):
     social_connect.add_argument("--account", default="")
     social_sub.add_parser("status")
     social_sub.add_parser("doctor")
+    social_prepare = social_sub.add_parser("prepare")
+    social_prepare.add_argument("provider")
+    social_prepare.add_argument("text")
+    social_prepare.add_argument("--media-ref")
+    social_prepare.add_argument("--media-required", action="store_true")
+    social_prepare.add_argument("--title")
+    social_prepare.add_argument("--description")
+    social_content = social_sub.add_parser("content")
+    social_content_sub = social_content.add_subparsers(dest="content_cmd", required=True)
+    content_draft = social_content_sub.add_parser("draft")
+    content_draft.add_argument("market")
+    content_draft.add_argument("offer")
+    content_draft.add_argument("--pain", default="")
+    content_draft.add_argument("--proof", default="")
+    content_draft.add_argument("--cta", default="")
+    content_draft.add_argument("--platforms", nargs="+")
+    content_queue = social_content_sub.add_parser("queue")
+    content_queue.add_argument("market")
+    content_queue.add_argument("offer")
+    content_queue.add_argument("--pain", default="")
+    content_queue.add_argument("--proof", default="")
+    content_queue.add_argument("--cta", default="")
+    content_queue.add_argument("--platforms", nargs="+")
+    social_content_sub.add_parser("list")
+    social_lead = social_sub.add_parser("lead")
+    social_lead_sub = social_lead.add_subparsers(dest="lead_cmd", required=True)
+    lead_ingest = social_lead_sub.add_parser("ingest")
+    lead_ingest.add_argument("platform")
+    lead_ingest.add_argument("message")
+    lead_ingest.add_argument("--external-id", default="")
+    lead_ingest.add_argument("--name", default="")
+    lead_ingest.add_argument("--handle", default="")
+    lead_ingest.add_argument("--contact", default="")
+    lead_ingest.add_argument("--consent", action="store_true")
+    lead_ingest.add_argument("--content-id", default="")
+    lead_ingest.add_argument("--campaign-id", default="")
+    lead_list = social_lead_sub.add_parser("list")
+    lead_list.add_argument("--status")
+    lead_qualify = social_lead_sub.add_parser("qualify")
+    lead_qualify.add_argument("lead_id")
+    lead_convert = social_lead_sub.add_parser("convert")
+    lead_convert.add_argument("lead_id")
+    social_lead_sub.add_parser("summary")
+    lead_followup = social_lead_sub.add_parser("followup")
+    lead_followup.add_argument("lead_id")
     social_publish = social_sub.add_parser("publish")
     social_publish.add_argument("provider")
     social_publish.add_argument("text")
@@ -233,6 +278,60 @@ def main(argv=None):
                 task = kernel.submit("social-accounts", "status", {"input": {}}, 70)
             elif args.social_cmd == "doctor":
                 task = kernel.submit("social-actions", "doctor", {"input": {}}, 75)
+            elif args.social_cmd == "prepare":
+                task = kernel.submit("social-actions", "prepare_publish", {
+                    "input": {
+                        "provider": args.provider,
+                        "text": args.text,
+                        "media_ref": args.media_ref,
+                        "media_required": args.media_required,
+                        "title": args.title,
+                        "description": args.description,
+                    }
+                }, 72)
+            elif args.social_cmd == "content":
+                if args.content_cmd == "list":
+                    task = kernel.submit("social-content", "list", {"input": {}}, 65)
+                else:
+                    task = kernel.submit("social-content", args.content_cmd, {
+                        "input": {
+                            "market": args.market,
+                            "offer": args.offer,
+                            "pain": args.pain,
+                            "proof": args.proof,
+                            "cta": args.cta,
+                            "platforms": args.platforms,
+                        }
+                    }, 70)
+            elif args.social_cmd == "lead":
+                if args.lead_cmd == "ingest":
+                    task = kernel.submit("social-leads", "ingest", {
+                        "input": {
+                            "platform": args.platform,
+                            "message": args.message,
+                            "external_id": args.external_id,
+                            "name": args.name,
+                            "handle": args.handle,
+                            "contact": args.contact,
+                            "consent": args.consent,
+                            "content_id": args.content_id,
+                            "campaign_id": args.campaign_id,
+                        }
+                    }, 68)
+                elif args.lead_cmd == "list":
+                    task = kernel.submit("social-leads", "list", {
+                        "input": {"status": args.status}
+                    }, 65)
+                elif args.lead_cmd in {"qualify", "convert"}:
+                    task = kernel.submit("social-leads", args.lead_cmd, {
+                        "input": {"lead_id": args.lead_id}
+                    }, 67)
+                elif args.lead_cmd == "summary":
+                    task = kernel.submit("social-leads", "summary", {"input": {}}, 65)
+                else:
+                    task = kernel.submit("social-leads", "followup_draft", {
+                        "input": {"lead_id": args.lead_id}
+                    }, 67)
             elif args.social_cmd == "publish":
                 task = kernel.submit("social-actions", "publish_text", {
                     "input": {

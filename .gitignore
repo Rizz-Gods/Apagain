@@ -12,6 +12,8 @@ skills/installed/
 data/schedule-state.json
 data/social_accounts.json
 data/social_learning.json
+data/social_queue.json
+data/social_leads.json
 data/social_oauth.json
 data/social_tokens.secure
 logs/*.log

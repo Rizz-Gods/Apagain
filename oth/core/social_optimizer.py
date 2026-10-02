@@ -46,6 +46,28 @@ class SocialOptimizer:
     def execute(self, action: str, payload: dict) -> OptimizationResult:
         source = payload.get("input", {})
         data = self._load()
+        if action == "ingest_funnel":
+            summaries = source.get("content_summary", [])
+            updated = []
+            for summary in summaries:
+                content_id = summary.get("content_id")
+                for experiment in data["experiments"]:
+                    if content_id and experiment.get("content_id") == content_id:
+                        metrics = experiment.setdefault("metrics", {})
+                        metrics["qualified_leads"] = float(summary.get("qualified_leads", 0))
+                        metrics["conversions"] = float(summary.get("conversions", 0))
+                        experiment["score"] = self._score(metrics)
+                        updated.append(content_id)
+            data.setdefault("funnel_sync", []).append({
+                "content_summary": summaries,
+                "updated": updated,
+                "synced_at": datetime.now(timezone.utc).isoformat(),
+            })
+            self._save(data)
+            return OptimizationResult(True, {
+                "updated_content_ids": updated,
+                "synced": len(summaries),
+            })
         if action == "record":
             metrics = source.get("metrics", {})
             experiment = {

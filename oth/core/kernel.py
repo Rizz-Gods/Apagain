@@ -20,6 +20,8 @@ from oth.workers.external import ExternalAgentWorker
 from oth.core.scout import ScoutWorker
 from oth.core.social_market import SocialMarketWorker
 from oth.core.social_accounts import SocialAccountManager
+from oth.core.social_content import SocialContentEngine
+from oth.core.social_leads import SocialLeadEngine
 from oth.core.social_optimizer import SocialOptimizer
 from oth.core.social_actions import SocialActionBus
 
@@ -76,6 +78,12 @@ class OTHKernel:
             elif mode == "social-optimization":
                 self.workers.append(SocialOptimizer(self.root))
                 modes.add("social-optimization")
+            elif mode == "social-content":
+                self.workers.append(SocialContentEngine(self.root))
+                modes.add("social-content")
+            elif mode == "social-leads":
+                self.workers.append(SocialLeadEngine(self.root))
+                modes.add("social-leads")
             elif mode == "social-actions":
                 self.workers.append(SocialActionBus(self.root))
                 modes.add("social-actions")
@@ -105,6 +113,10 @@ class OTHKernel:
             self.workers.append(SocialAccountManager(self.root))
         if "social-optimization" not in modes:
             self.workers.append(SocialOptimizer(self.root))
+        if "social-content" not in modes:
+            self.workers.append(SocialContentEngine(self.root))
+        if "social-leads" not in modes:
+            self.workers.append(SocialLeadEngine(self.root))
         if "social-actions" not in modes:
             self.workers.append(SocialActionBus(self.root))
 

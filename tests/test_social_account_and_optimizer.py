@@ -90,6 +90,39 @@ class SocialAccountAndOptimizerTests(unittest.TestCase):
             self.assertNotIn("secret-test", raw)
             self.assertEqual(store.get("linkedin")["access_token"], "secret-test")
 
+    def test_optimizer_ingests_funnel_metrics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worker = SocialOptimizer(root)
+            worker.execute("record", {
+                "input": {
+                    "platform": "linkedin",
+                    "content_id": "post-77",
+                    "hook": "proof",
+                    "format": "carousel",
+                    "pillar": "pain",
+                    "metrics": {
+                        "impressions": 1000,
+                        "engagements": 20,
+                        "qualified_leads": 0,
+                        "conversions": 0,
+                    },
+                }
+            })
+            result = worker.execute("ingest_funnel", {
+                "input": {
+                    "content_summary": [{
+                        "content_id": "post-77",
+                        "qualified_leads": 4,
+                        "conversions": 1,
+                    }]
+                }
+            })
+            self.assertTrue(result.success)
+            data = json.loads((root / "data" / "social_learning.json").read_text())
+            self.assertEqual(data["experiments"][0]["metrics"]["qualified_leads"], 4)
+            self.assertEqual(data["experiments"][0]["metrics"]["conversions"], 1)
+
     def test_optimizer_recommends_from_recorded_metrics(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

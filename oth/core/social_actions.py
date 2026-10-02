@@ -30,18 +30,26 @@ class SocialActionBus:
                 "publish_url": "https://api.linkedin.com/rest/posts",
                 "version_env": "OTH_LINKEDIN_API_VERSION",
                 "default_version": "202608",
+                "local_capabilities": ["draft", "adapt", "prepare", "queue"],
+                "live_capabilities": ["publish_text", "health"],
             },
             "youtube": {
                 "token_env": "OTH_SOCIAL_YOUTUBE_TOKEN",
                 "health_url": "https://www.googleapis.com/youtube/v3/channels?part=snippet%2Cstatistics&mine=true",
+                "local_capabilities": ["draft", "adapt", "prepare", "queue", "metadata"],
+                "live_capabilities": ["health", "metadata"],
             },
             "x": {
                 "token_env": "OTH_SOCIAL_X_TOKEN",
                 "health_url": "https://api.x.com/2/users/me",
                 "publish_url": "https://api.x.com/2/tweets",
+                "local_capabilities": ["draft", "adapt", "prepare", "queue"],
+                "live_capabilities": ["publish_text", "health"],
             },
             "instagram": {
                 "token_env": "OTH_SOCIAL_INSTAGRAM_TOKEN",
+                "local_capabilities": ["draft", "adapt", "prepare", "queue", "media_brief"],
+                "live_capabilities": ["health"],
             },
         }
 
@@ -210,9 +218,45 @@ class SocialActionBus:
         except URLError as exc:
             return SocialActionResult(False, {}, f"Network error: {exc}", retryable=True)
 
+    def _prepare_publish(self, provider: str, source: dict[str, Any]) -> SocialActionResult:
+        limits = {
+            "linkedin": {"text": 3000, "media": True, "adapter": "live_text"},
+            "x": {"text": 280, "media": True, "adapter": "live_text"},
+            "youtube": {"text": 5000, "media": True, "adapter": "metadata_only"},
+            "instagram": {"text": 2200, "media": True, "adapter": "queued_media"},
+        }
+        spec = limits.get(provider)
+        if not spec:
+            return SocialActionResult(False, {}, f"Unsupported social provider: {provider}")
+        text = str(source.get("text", "")).strip()
+        if len(text) > spec["text"]:
+            return SocialActionResult(False, {}, f"Text exceeds the {provider} preparation limit")
+        media_required = bool(source.get("media_required", False))
+        ready = bool(text) and (not media_required or bool(source.get("media_ref")))
+        return SocialActionResult(True, {
+            "provider": provider,
+            "status": "ready_for_approval" if ready else "needs_input",
+            "adapter": spec["adapter"],
+            "payload": {
+                "text": text,
+                "media_ref": source.get("media_ref"),
+                "title": source.get("title"),
+                "description": source.get("description"),
+            },
+            "requirements": {
+                "approval": "external",
+                "media_required": media_required,
+                "media_present": bool(source.get("media_ref")),
+                "credential_required_for_live": True,
+            },
+            "live_action_available": spec["adapter"] == "live_text" and provider in {"linkedin", "x"},
+        })
+
     def execute(self, action: str, payload: dict) -> SocialActionResult:
         source = payload.get("input", {})
         provider = str(source.get("provider", "")).lower()
+        if action == "prepare_publish":
+            return self._prepare_publish(provider, source)
         if action == "health":
             return self._health(provider)
         if action == "publish_text":
@@ -231,6 +275,9 @@ class SocialActionBus:
                 result = self._health(name)
                 results.append({
                     "provider": name,
+                    "local_capabilities": self.specs[name].get("local_capabilities", []),
+                    "live_capabilities": self.specs[name].get("live_capabilities", []),
+                    "credential_required_for_live": True,
                     **result.output,
                     "error": result.error,
                 })
