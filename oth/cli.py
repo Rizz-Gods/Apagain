@@ -217,6 +217,7 @@ def main(argv=None):
     resolve_sub = resolve.add_subparsers(dest="resolve_cmd", required=True)
     resolve_sub.add_parser("status")
     resolve_sub.add_parser("launch")
+    resolve_sub.add_parser("connect")
     resolve_project = resolve_sub.add_parser("prepare")
     resolve_project.add_argument("--campaign-id")
     media = sub.add_parser("media")
@@ -598,6 +599,8 @@ def main(argv=None):
                 action = "status"
             elif args.resolve_cmd == "launch":
                 action = "launch"
+            elif args.resolve_cmd == "connect":
+                action = "connect"
             else:
                 action = "prepare_project"
             task = kernel.submit("resolve-bridge", action, {"input": {"campaign_id": getattr(args, "campaign_id", None)}}, 68)
