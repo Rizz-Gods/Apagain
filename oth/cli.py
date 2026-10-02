@@ -69,6 +69,11 @@ def main(argv=None):
     social_connect.add_argument("provider")
     social_connect.add_argument("--account", default="")
     social_sub.add_parser("status")
+    social_sub.add_parser("doctor")
+    social_publish = social_sub.add_parser("publish")
+    social_publish.add_argument("provider")
+    social_publish.add_argument("text")
+    social_publish.add_argument("--actor")
     social_opt = social_sub.add_parser("optimize")
     social_opt.add_argument("--platform")
     social_record = social_sub.add_parser("record")
@@ -205,6 +210,16 @@ def main(argv=None):
                 }, 70)
             elif args.social_cmd == "status":
                 task = kernel.submit("social-accounts", "status", {"input": {}}, 70)
+            elif args.social_cmd == "doctor":
+                task = kernel.submit("social-actions", "doctor", {"input": {}}, 75)
+            elif args.social_cmd == "publish":
+                task = kernel.submit("social-actions", "publish_text", {
+                    "input": {
+                        "provider": args.provider,
+                        "text": args.text,
+                        "actor": args.actor,
+                    }
+                }, 75)
             elif args.social_cmd == "optimize":
                 task = kernel.submit("social-optimization", "optimize", {
                     "input": {"platform": args.platform}

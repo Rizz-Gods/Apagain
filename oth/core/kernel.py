@@ -21,6 +21,7 @@ from oth.core.scout import ScoutWorker
 from oth.core.social_market import SocialMarketWorker
 from oth.core.social_accounts import SocialAccountManager
 from oth.core.social_optimizer import SocialOptimizer
+from oth.core.social_actions import SocialActionBus
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -75,6 +76,9 @@ class OTHKernel:
             elif mode == "social-optimization":
                 self.workers.append(SocialOptimizer(self.root))
                 modes.add("social-optimization")
+            elif mode == "social-actions":
+                self.workers.append(SocialActionBus(self.root))
+                modes.add("social-actions")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
@@ -101,6 +105,8 @@ class OTHKernel:
             self.workers.append(SocialAccountManager(self.root))
         if "social-optimization" not in modes:
             self.workers.append(SocialOptimizer(self.root))
+        if "social-actions" not in modes:
+            self.workers.append(SocialActionBus(self.root))
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)
@@ -124,6 +130,8 @@ class OTHKernel:
             task_payload["memory_context"] = "\n".join(
                 f'{m["created_at"]}: {m["content"]}' for m in memories
             )
+        if row["capability"] == "social-actions" and row["action"] in {"publish_text"}:
+            task_payload["risk"] = "external"
         decision = self.policy.check(task_payload)
         if not decision.allowed:
             self.db.update_task(task_id, "blocked", now_iso())

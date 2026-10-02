@@ -66,6 +66,16 @@
       }
     },
     {
+      "id": "social-actions",
+      "name": "Social Action Bus",
+      "capabilities": ["social-actions"],
+      "status": "available",
+      "metadata": {
+        "mode": "social-actions",
+        "priority": 75
+      }
+    },
+    {
       "id": "opportunity-analyst",
       "name": "Opportunity Analyst",
       "capabilities": ["opportunity-analysis"],
