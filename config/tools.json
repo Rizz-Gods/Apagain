@@ -21,8 +21,14 @@
     {
       "id": "tool.ffmpeg",
       "name": "FFmpeg",
-      "executable": "ffmpeg",
+      "executable": "C:\\Users\\Admin\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-9.0.2-full_build\\bin\\ffmpeg.exe",
       "capabilities": ["media", "video", "audio"]
+    },
+    {
+      "id": "tool.git-lfs",
+      "name": "Git LFS",
+      "executable": "C:\\Users\\Admin\\bin\\git-lfs\\git-lfs-3.8.0\\git-lfs.exe",
+      "capabilities": ["large_files", "version_control"]
     },
     {
       "id": "tool.hermes",
