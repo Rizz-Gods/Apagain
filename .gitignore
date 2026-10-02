@@ -27,3 +27,4 @@ logs/*.log
 .oth-node-red/
 workflows/social/*.json
 businesses/social-market-*/
+*.egg-info/
