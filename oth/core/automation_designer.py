@@ -43,7 +43,7 @@ class AutomationDesigner:
             "notify the operator/customer",
             "log the outcome for analytics",
         ]
-        stack = ["n8n", "Python", "official APIs", "SQLite/PostgreSQL"]
+        stack = ["Node-RED", "Python", "official APIs", "SQLite/PostgreSQL"]
         if "browser" in combined or "website" in combined:
             stack.append("agent-browser")
         if "whatsapp" in combined:

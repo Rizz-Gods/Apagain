@@ -46,7 +46,13 @@ class QAValidator:
                 "errors": ["project directory missing"],
             }
 
-        required = ["manifest.json", "README.md", "workflow.json", "n8n.workflow.json"]
+        required = [
+            "manifest.json",
+            "README.md",
+            "workflow.json",
+            "n8n.workflow.json",
+            "node-red.flow.json",
+        ]
         for name in required:
             self._check(checks, f"required:{name}",
                         (project_path / name).exists())
@@ -55,6 +61,7 @@ class QAValidator:
             manifest = json.loads((project_path / "manifest.json").read_text(encoding="utf-8"))
             workflow = json.loads((project_path / "workflow.json").read_text(encoding="utf-8"))
             n8n_workflow = json.loads((project_path / "n8n.workflow.json").read_text(encoding="utf-8"))
+            node_red_workflow = json.loads((project_path / "node-red.flow.json").read_text(encoding="utf-8"))
             self._check(checks, "manifest_schema", isinstance(manifest, dict))
             self._check(checks, "workflow_schema",
                         isinstance(workflow, dict) and isinstance(workflow.get("steps"), list))
@@ -66,6 +73,14 @@ class QAValidator:
                 and isinstance(n8n_workflow.get("connections"), dict)
                 and n8n_workflow.get("active") is False,
                 "draft workflow must be structurally valid and inactive",
+            )
+            self._check(
+                checks,
+                "node_red_schema",
+                isinstance(node_red_workflow, list)
+                and len(node_red_workflow) >= 2
+                and all(isinstance(node, dict) for node in node_red_workflow),
+                "Node-RED fallback flow must be an importable node list",
             )
         except Exception as exc:
             errors.append(f"JSON validation failed: {exc}")

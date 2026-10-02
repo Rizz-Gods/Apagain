@@ -21,7 +21,7 @@ class QAValidatorTests(unittest.TestCase):
             project = root / "businesses" / "demo"
             project.mkdir(parents=True)
             (project / "manifest.json").write_text(
-                '{"title":"Demo","problem":"Manual work","stack":["n8n"]}'
+                '{"title":"Demo","problem":"Manual work","stack":["Node-RED"]}'
             )
             (project / "workflow.json").write_text(
                 '{"trigger":"event","steps":["capture","notify"],'
@@ -31,6 +31,11 @@ class QAValidatorTests(unittest.TestCase):
                 '{"name":"Demo","nodes":[{"id":"1","name":"Trigger",'
                 '"type":"n8n-nodes-base.manualTrigger","typeVersion":1}],'
                 '"connections":{},"active":false}'
+            )
+            (project / "node-red.flow.json").write_text(
+                '[{"id":"tab","type":"tab","label":"Demo","disabled":false},'
+                '{"id":"inject","type":"inject","z":"tab","name":"Trigger",'
+                '"props":[{"p":"payload"}],"wires":[[]]}]'
             )
             (project / "README.md").write_text("# Demo")
 

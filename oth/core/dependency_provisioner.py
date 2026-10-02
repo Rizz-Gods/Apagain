@@ -13,6 +13,11 @@ class DependencyProvisioner:
     id = "dependency-provisioner"
 
     ALLOWLIST = {
+        "node-red": {
+            "manager": "npm",
+            "command": ["npm.cmd", "install", "-g", "node-red"],
+            "binary": "node-red.cmd",
+        },
         "n8n": {
             "manager": "npm",
             "command": ["npm.cmd", "install", "-g", "n8n"],

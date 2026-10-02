@@ -33,6 +33,10 @@ class WorkflowCompilerTests(unittest.TestCase):
             data = json.loads(path.read_text())
             self.assertFalse(data["active"])
             self.assertEqual(len(data["nodes"]), 3)
+            red_path = project / "node-red.flow.json"
+            self.assertTrue(red_path.exists())
+            red = json.loads(red_path.read_text())
+            self.assertGreaterEqual(len(red), 4)
 
 if __name__ == "__main__":
     unittest.main()

@@ -47,6 +47,8 @@ class AutomationDesignerTests(unittest.TestCase):
             self.assertEqual(result["status"], "succeeded")
             self.assertEqual(result["count"], 1)
             self.assertEqual(len(kernel.db.list_blueprints()), 1)
+            self.assertIn("Node-RED", result["blueprints"][0]["blueprint"]["stack"])
+
             kernel.close()
 
 if __name__ == "__main__":
