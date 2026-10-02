@@ -18,6 +18,8 @@ data/social_autopilot.json
 data/pilot_state.json
 data/social_autonomy.json
 data/social_editorial.json
+data/production_manifests.json
+data/resolve_state.json
 data/browser_profiles/
 data/social_oauth.json
 data/social_tokens.secure

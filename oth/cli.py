@@ -207,6 +207,18 @@ def main(argv=None):
     memory_list = memory_sub.add_parser("list")
     memory_list.add_argument("--capability")
 
+    production = sub.add_parser("production")
+    production_sub = production.add_subparsers(dest="production_cmd", required=True)
+    production_sub.add_parser("list")
+    production_sub.add_parser("review")
+    production_plan = production_sub.add_parser("plan")
+    production_plan.add_argument("--brief-id")
+    resolve = sub.add_parser("resolve")
+    resolve_sub = resolve.add_subparsers(dest="resolve_cmd", required=True)
+    resolve_sub.add_parser("status")
+    resolve_sub.add_parser("launch")
+    resolve_project = resolve_sub.add_parser("prepare")
+    resolve_project.add_argument("--campaign-id")
     media = sub.add_parser("media")
     media_sub = media.add_subparsers(dest="media_cmd", required=True)
     media_sub.add_parser("list")
@@ -541,6 +553,27 @@ def main(argv=None):
             task = kernel.submit("social-autonomy", "command", {
                 "input": {"instruction": " ".join(args.instruction)}
             }, 90)
+            print(json.dumps(kernel.dispatch(task.id), indent=2))
+            return
+        if args.cmd == "production":
+            if args.production_cmd == "list":
+                task = kernel.submit("media-production", "list", {"input": {}}, 65)
+            elif args.production_cmd == "review":
+                task = kernel.submit("media-production", "review", {"input": {}}, 65)
+            else:
+                task = kernel.submit("media-production", "plan", {
+                    "input": {"briefs": [] if not args.brief_id else [{"brief_id": args.brief_id}]}
+                }, 68)
+            print(json.dumps(kernel.dispatch(task.id), indent=2))
+            return
+        if args.cmd == "resolve":
+            if args.resolve_cmd == "status":
+                action = "status"
+            elif args.resolve_cmd == "launch":
+                action = "launch"
+            else:
+                action = "prepare_project"
+            task = kernel.submit("resolve-bridge", action, {"input": {"campaign_id": getattr(args, "campaign_id", None)}}, 68)
             print(json.dumps(kernel.dispatch(task.id), indent=2))
             return
         if args.cmd == "blueprints":

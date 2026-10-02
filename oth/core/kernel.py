@@ -32,6 +32,8 @@ from oth.core.media_assets import MediaAssetManager
 from oth.core.social_planner import SocialPlanner
 from oth.core.social_editor import SocialEditorialDirector
 from oth.core.social_autonomy import SocialAutonomy
+from oth.core.media_producer import MediaProducer
+from oth.core.resolve_bridge import ResolveBridge
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -119,6 +121,12 @@ class OTHKernel:
             elif mode == "social-autonomy":
                 self.workers.append(SocialAutonomy(self.root))
                 modes.add("social-autonomy")
+            elif mode == "media-production":
+                self.workers.append(MediaProducer(self.root))
+                modes.add("media-production")
+            elif mode == "resolve-bridge":
+                self.workers.append(ResolveBridge(self.root))
+                modes.add("resolve-bridge")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
@@ -167,6 +175,10 @@ class OTHKernel:
             self.workers.append(SocialEditorialDirector(self.root))
         if "social-autonomy" not in modes:
             self.workers.append(SocialAutonomy(self.root))
+        if "media-production" not in modes:
+            self.workers.append(MediaProducer(self.root))
+        if "resolve-bridge" not in modes:
+            self.workers.append(ResolveBridge(self.root))
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)

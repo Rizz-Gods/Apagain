@@ -138,12 +138,16 @@ class SocialAutonomy:
         campaigns = self._read(self.root / "data" / "social_autopilot.json", {"campaigns": []})
         learning = self._read(self.root / "data" / "social_learning.json", {"experiments": []})
         editorial = self._read(self.root / "data" / "social_editorial.json", {"briefs": []})
+        production = self._read(self.root / "data" / "production_manifests.json", {"manifests": []})
+        resolve = self._read(self.root / "data" / "resolve_state.json", {})
         return {
             "queue": queue.get("items", []),
             "accounts": accounts.get("accounts", []),
             "campaigns": campaigns.get("campaigns", []),
             "experiments": learning.get("experiments", []),
             "editorial_briefs": editorial.get("briefs", []),
+            "production_manifests": production.get("manifests", []),
+            "resolve": resolve,
         }
     def _due_items(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         now = datetime.now(timezone.utc)
@@ -232,6 +236,14 @@ class SocialAutonomy:
                 }
             })
             decisions.append({"type": "editorial_gap", "reason": "creative_briefs_missing"})
+        if snap["editorial_briefs"] and len(snap["production_manifests"]) < len(snap["editorial_briefs"]):
+            initiatives.append({
+                "capability": "media-production", "action": "plan", "priority": 72,
+                "payload": {"input": {"briefs": snap["editorial_briefs"][-12:]}}
+            })
+            decisions.append({"type": "production_gap", "reason": "production_manifests_missing"})
+        if snap["production_manifests"] and not snap["resolve"].get("installed", False):
+            decisions.append({"type": "production_dependency", "reason": "resolve_not_installed"})
         if any(x.get("status") == "failed" for x in queue):
             if config.get("decision_rules", {}).get("replan_after_failed_publish", True):
                 initiatives.append({
@@ -273,6 +285,8 @@ class SocialAutonomy:
                     "campaigns": len(snap["campaigns"]),
                     "queue_items": len(snap["queue"]),
                     "editorial_briefs": len(snap["editorial_briefs"]),
+                    "production_manifests": len(snap["production_manifests"]),
+                    "resolve_installed": bool(snap["resolve"].get("installed", False)),
                     "experiments": len(snap["experiments"]),
                 },
                 "publish_mode": config.get("initiative", {}).get("publish_mode", "approval"),

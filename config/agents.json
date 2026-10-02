@@ -151,6 +151,28 @@
       }
     },
     {
+      "id": "media-producer",
+      "name": "Media Production Director",
+      "capabilities": ["media-production"],
+      "status": "available",
+      "metadata": {
+        "mode": "media-production",
+        "priority": 82,
+        "role": "timeline_editing_render_strategy"
+      }
+    },
+    {
+      "id": "resolve-bridge",
+      "name": "DaVinci Resolve Bridge",
+      "capabilities": ["resolve-bridge"],
+      "status": "available",
+      "metadata": {
+        "mode": "resolve-bridge",
+        "priority": 79,
+        "role": "editor_execution_and_render"
+      }
+    },
+    {
       "id": "social-autonomy",
       "name": "Social Autonomy Director",
       "capabilities": ["social-autonomy"],

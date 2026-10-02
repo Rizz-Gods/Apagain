@@ -1,0 +1,42 @@
+{
+  "primary_editor": "davinci-resolve-studio",
+  "required_version_major": 21,
+  "minimum_version": "21.1",
+  "executable_candidates": [
+    "C:\\Program Files\\Blackmagic Design\\DaVinci Resolve\\Resolve.exe",
+    "C:\\Program Files\\Blackmagic Design\\DaVinci Resolve\\Resolve.exe"
+  ],
+  "automation": {
+    "mode": "external-python",
+    "studio_required": true,
+    "script_engine": ["python", "lua"],
+    "render_control": true,
+    "project_control": true
+  },
+  "defaults": {
+    "social_master": {
+      "resolution": "1080x1920",
+      "frame_rate": 30,
+      "audio_sample_rate": 48000,
+      "codec": "h264",
+      "container": "mp4"
+    },
+    "youtube_short": {
+      "max_duration_seconds": 60
+    },
+    "instagram_reel": {
+      "preferred_duration_seconds": 25
+    },
+    "linkedin_native_video": {
+      "preferred_duration_seconds": 45
+    }
+  },
+  "qa": {
+    "require_render_probe": true,
+    "require_audio": true,
+    "require_caption_track": true,
+    "require_vertical_safe_area": true,
+    "max_black_frames_at_start": 3,
+    "max_silence_seconds": 1.2
+  }
+}
