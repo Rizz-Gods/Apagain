@@ -70,6 +70,16 @@
       }
     },
     {
+      "id": "social-control",
+      "name": "Social Control",
+      "capabilities": ["social-control"],
+      "status": "available",
+      "metadata": {
+        "mode": "social-control",
+        "priority": 78
+      }
+    },
+    {
       "id": "social-queue",
       "name": "Social Queue Manager",
       "capabilities": ["social-queue"],

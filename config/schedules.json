@@ -45,6 +45,17 @@
       }
     },
     {
+      "id": "social-control-1h",
+      "enabled": true,
+      "interval_seconds": 3600,
+      "capability": "social-control",
+      "action": "status",
+      "priority": 60,
+      "payload": {
+        "risk": "safe"
+      }
+    },
+    {
       "id": "social-queue-5m",
       "enabled": true,
       "interval_seconds": 300,

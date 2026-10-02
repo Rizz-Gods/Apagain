@@ -112,6 +112,10 @@ def main(argv=None):
     content_queue.add_argument("--cta", default="")
     content_queue.add_argument("--platforms", nargs="+")
     social_content_sub.add_parser("list")
+    social_control = social_sub.add_parser("control")
+    social_control_sub = social_control.add_subparsers(dest="control_cmd", required=True)
+    social_control_sub.add_parser("status")
+    social_control_sub.add_parser("attention")
     social_queue = social_sub.add_parser("queue")
     social_queue_sub = social_queue.add_subparsers(dest="queue_cmd", required=True)
     queue_list = social_queue_sub.add_parser("list")
@@ -317,6 +321,8 @@ def main(argv=None):
                         "description": args.description,
                     }
                 }, 72)
+            elif args.social_cmd == "control":
+                task = kernel.submit("social-control", args.control_cmd, {"input": {}}, 60)
             elif args.social_cmd == "queue":
                 if args.queue_cmd == "list":
                     task = kernel.submit("social-queue", "list", {

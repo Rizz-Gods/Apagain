@@ -24,6 +24,7 @@ from oth.core.social_content import SocialContentEngine
 from oth.core.social_leads import SocialLeadEngine
 from oth.core.social_autopilot import SocialAutopilot
 from oth.core.social_queue import SocialQueueManager
+from oth.core.social_control import SocialControl
 from oth.core.social_optimizer import SocialOptimizer
 from oth.core.social_actions import SocialActionBus
 
@@ -92,6 +93,9 @@ class OTHKernel:
             elif mode == "social-queue":
                 self.workers.append(SocialQueueManager(self.root))
                 modes.add("social-queue")
+            elif mode == "social-control":
+                self.workers.append(SocialControl(self.root))
+                modes.add("social-control")
             elif mode == "social-actions":
                 self.workers.append(SocialActionBus(self.root))
                 modes.add("social-actions")
@@ -129,6 +133,8 @@ class OTHKernel:
             self.workers.append(SocialAutopilot(self.root))
         if "social-queue" not in modes:
             self.workers.append(SocialQueueManager(self.root))
+        if "social-control" not in modes:
+            self.workers.append(SocialControl(self.root))
         if "social-actions" not in modes:
             self.workers.append(SocialActionBus(self.root))
 
