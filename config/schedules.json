@@ -76,6 +76,17 @@
       "payload": {
         "risk": "safe"
       }
+    },
+    {
+      "id": "social-analytics-1h",
+      "enabled": true,
+      "interval_seconds": 3600,
+      "capability": "social-analytics",
+      "action": "sync",
+      "priority": 64,
+      "payload": {
+        "risk": "safe"
+      }
     }
   ]
 }

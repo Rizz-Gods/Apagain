@@ -27,6 +27,7 @@ from oth.core.social_queue import SocialQueueManager
 from oth.core.social_control import SocialControl
 from oth.core.social_optimizer import SocialOptimizer
 from oth.core.social_actions import SocialActionBus
+from oth.core.social_analytics import SocialAnalytics
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -99,6 +100,9 @@ class OTHKernel:
             elif mode == "social-actions":
                 self.workers.append(SocialActionBus(self.root))
                 modes.add("social-actions")
+            elif mode == "social-analytics":
+                self.workers.append(SocialAnalytics(self.root))
+                modes.add("social-analytics")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
@@ -137,6 +141,8 @@ class OTHKernel:
             self.workers.append(SocialControl(self.root))
         if "social-actions" not in modes:
             self.workers.append(SocialActionBus(self.root))
+        if "social-analytics" not in modes:
+            self.workers.append(SocialAnalytics(self.root))
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)

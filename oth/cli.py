@@ -116,6 +116,15 @@ def main(argv=None):
     content_queue.add_argument("--media-ref")
     content_queue.add_argument("--privacy-status", choices=["private", "unlisted", "public"], default="private")
     social_content_sub.add_parser("list")
+    social_analytics = social_sub.add_parser("analytics")
+    social_analytics_sub = social_analytics.add_subparsers(dest="analytics_cmd", required=True)
+    social_analytics_sub.add_parser("list")
+    social_analytics_sub.add_parser("sync")
+    analytics_fetch = social_analytics_sub.add_parser("fetch")
+    analytics_fetch.add_argument("provider")
+    analytics_fetch.add_argument("external_id")
+    analytics_fetch.add_argument("--content-id", default="")
+    analytics_fetch.add_argument("--campaign-id", default="")
     social_control = social_sub.add_parser("control")
     social_control_sub = social_control.add_subparsers(dest="control_cmd", required=True)
     social_control_sub.add_parser("status")
@@ -331,6 +340,20 @@ def main(argv=None):
                         "description": args.description,
                     }
                 }, 72)
+            elif args.social_cmd == "analytics":
+                if args.analytics_cmd == "list":
+                    task = kernel.submit("social-analytics", "list", {"input": {}}, 63)
+                elif args.analytics_cmd == "sync":
+                    task = kernel.submit("social-analytics", "sync", {"input": {}}, 64)
+                else:
+                    task = kernel.submit("social-analytics", "fetch", {
+                        "input": {
+                            "platform": args.provider,
+                            "external_id": args.external_id,
+                            "content_id": args.content_id,
+                            "campaign_id": args.campaign_id,
+                        }
+                    }, 64)
             elif args.social_cmd == "control":
                 task = kernel.submit("social-control", args.control_cmd, {"input": {}}, 60)
             elif args.social_cmd == "queue":

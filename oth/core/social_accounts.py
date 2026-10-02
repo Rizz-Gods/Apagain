@@ -21,7 +21,7 @@ PROVIDERS = {
         "auth_url": "https://www.linkedin.com/oauth/v2/authorization",
         "token_url": "https://www.linkedin.com/oauth/v2/accessToken",
         "capabilities": ["publish_posts", "mentions", "lead_sync", "analytics"],
-        "scopes": ["openid", "profile", "email", "w_member_social"],
+        "scopes": ["openid", "profile", "email", "w_member_social", "r_member_postAnalytics"],
         "redirect_note": "LinkedIn requires the exact HTTPS redirect URI to be registered in the developer app.",
     },
     "youtube": {
