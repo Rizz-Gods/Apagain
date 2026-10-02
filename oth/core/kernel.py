@@ -28,6 +28,7 @@ from oth.core.social_control import SocialControl
 from oth.core.social_optimizer import SocialOptimizer
 from oth.core.social_actions import SocialActionBus
 from oth.core.social_analytics import SocialAnalytics
+from oth.core.media_assets import MediaAssetManager
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -103,6 +104,9 @@ class OTHKernel:
             elif mode == "social-analytics":
                 self.workers.append(SocialAnalytics(self.root))
                 modes.add("social-analytics")
+            elif mode == "media-assets":
+                self.workers.append(MediaAssetManager(self.root))
+                modes.add("media-assets")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
@@ -143,6 +147,8 @@ class OTHKernel:
             self.workers.append(SocialActionBus(self.root))
         if "social-analytics" not in modes:
             self.workers.append(SocialAnalytics(self.root))
+        if "media-assets" not in modes:
+            self.workers.append(MediaAssetManager(self.root))
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)

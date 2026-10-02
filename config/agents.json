@@ -120,6 +120,16 @@
       }
     },
     {
+      "id": "media-assets",
+      "name": "Media Asset Manager",
+      "capabilities": ["media-assets"],
+      "status": "available",
+      "metadata": {
+        "mode": "media-assets",
+        "priority": 67
+      }
+    },
+    {
       "id": "social-analytics",
       "name": "Social Analytics",
       "capabilities": ["social-analytics"],

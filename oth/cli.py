@@ -189,6 +189,16 @@ def main(argv=None):
     memory_list = memory_sub.add_parser("list")
     memory_list.add_argument("--capability")
 
+    media = sub.add_parser("media")
+    media_sub = media.add_subparsers(dest="media_cmd", required=True)
+    media_sub.add_parser("list")
+    media_inspect = media_sub.add_parser("inspect")
+    media_inspect.add_argument("media_ref")
+    media_register = media_sub.add_parser("register")
+    media_register.add_argument("media_ref")
+    media_normalize = media_sub.add_parser("normalize")
+    media_normalize.add_argument("media_ref")
+
     schedule = sub.add_parser("schedule")
     schedule_sub = schedule.add_subparsers(dest="schedule_cmd", required=True)
     schedule_sub.add_parser("list")
@@ -452,6 +462,15 @@ def main(argv=None):
                         },
                     }
                 }, 65)
+            print(json.dumps(kernel.dispatch(task.id), indent=2))
+            return
+        if args.cmd == "media":
+            if args.media_cmd == "list":
+                task = kernel.submit("media-assets", "list", {"input": {}}, 65)
+            else:
+                task = kernel.submit("media-assets", args.media_cmd, {
+                    "input": {"media_ref": args.media_ref}
+                }, 68)
             print(json.dumps(kernel.dispatch(task.id), indent=2))
             return
         if args.cmd == "blueprints":
