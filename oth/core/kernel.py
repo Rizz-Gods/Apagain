@@ -18,6 +18,7 @@ from oth.workers.browser import BrowserWorker
 from oth.workers.builtin import BuiltinWorker
 from oth.workers.external import ExternalAgentWorker
 from oth.core.scout import ScoutWorker
+from oth.core.social_market import SocialMarketWorker
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -63,6 +64,9 @@ class OTHKernel:
             elif mode == "compiler":
                 self.workers.append(WorkflowCompiler(self.root))
                 modes.add("compiler")
+            elif mode == "social-market":
+                self.workers.append(SocialMarketWorker(self.root))
+                modes.add("social-market")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
@@ -83,6 +87,8 @@ class OTHKernel:
             self.workers.append(DependencyProvisioner())
         if "compiler" not in modes:
             self.workers.append(WorkflowCompiler(self.root))
+        if "social-market" not in modes:
+            self.workers.append(SocialMarketWorker(self.root))
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)

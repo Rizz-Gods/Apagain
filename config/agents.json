@@ -36,6 +36,16 @@
       }
     },
     {
+      "id": "social-market",
+      "name": "Social Market Engine",
+      "capabilities": ["social-market"],
+      "status": "available",
+      "metadata": {
+        "mode": "social-market",
+        "priority": 68
+      }
+    },
+    {
       "id": "opportunity-analyst",
       "name": "Opportunity Analyst",
       "capabilities": ["opportunity-analysis"],

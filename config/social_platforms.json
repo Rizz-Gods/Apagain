@@ -1,0 +1,63 @@
+{
+  "strategy": "inbound_first",
+  "principles": [
+    "Use official APIs when available",
+    "Use browser automation only where platform rules permit",
+    "Do not mass-follow, mass-DM, fake engagement, or evade platform controls",
+    "Prefer owned audience, opt-in leads, and measurable conversion paths",
+    "Route platform limitations to another supported backend"
+  ],
+  "platforms": {
+    "linkedin": {
+      "mode": "api_first",
+      "capabilities": [
+        "publish_posts",
+        "read_page_activity",
+        "monitor_mentions",
+        "lead_sync",
+        "analytics"
+      ],
+      "auth": "oauth",
+      "cost_model": "access_and_product_dependent"
+    },
+    "youtube": {
+      "mode": "api_first",
+      "capabilities": [
+        "upload_video",
+        "manage_metadata",
+        "read_channel_metrics",
+        "read_comments"
+      ],
+      "auth": "oauth",
+      "cost_model": "quota_based"
+    },
+    "x": {
+      "mode": "api_first",
+      "capabilities": [
+        "publish_posts",
+        "monitor_mentions",
+        "read_post_metrics",
+        "inbound_dm_workflows"
+      ],
+      "auth": "oauth",
+      "cost_model": "usage_based"
+    },
+    "instagram": {
+      "mode": "api_first_or_browser_fallback",
+      "capabilities": [
+        "publish_supported_media",
+        "read_insights",
+        "monitor_inbound_engagement"
+      ],
+      "auth": "oauth",
+      "cost_model": "access_dependent"
+    }
+  },
+  "workflow_policy": {
+    "human_approval": [
+      "paid_campaign_launch",
+      "public_claim_with_material_business_impact",
+      "external_irreversible_action"
+    ]
+  }
+}
