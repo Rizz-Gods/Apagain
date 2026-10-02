@@ -1,4 +1,6 @@
+import http.client
 import json
+import mimetypes
 import os
 import time
 import urllib.parse
@@ -20,9 +22,10 @@ class SocialActionResult:
 class SocialActionBus:
     id = "social-actions"
 
-    def __init__(self, root=None, requester=None):
+    def __init__(self, root=None, requester=None, video_uploader=None):
         self.root = Path(root) if root else None
         self.requester = requester or self._request
+        self.video_uploader = video_uploader or self._upload_youtube_resumable
         self.token_store = SecureTokenStore(root) if root else None
         self.specs = {
             "linkedin": {
@@ -37,8 +40,8 @@ class SocialActionBus:
             "youtube": {
                 "token_env": "OTH_SOCIAL_YOUTUBE_TOKEN",
                 "health_url": "https://www.googleapis.com/youtube/v3/channels?part=snippet%2Cstatistics&mine=true",
-                "local_capabilities": ["draft", "adapt", "prepare", "queue", "metadata"],
-                "live_capabilities": ["health", "metadata"],
+                "local_capabilities": ["draft", "adapt", "prepare", "queue", "metadata", "video"],
+                "live_capabilities": ["health", "metadata", "publish_video"],
             },
             "x": {
                 "token_env": "OTH_SOCIAL_X_TOKEN",
@@ -247,11 +250,124 @@ class SocialActionBus:
             self._update_queue(content_id, "dispatching", last_error=f"network_error:{exc}")
             return SocialActionResult(False, {}, f"Network error: {exc}", retryable=True)
 
+    def _resolve_media_path(self, media_ref: str) -> Path:
+        if not self.root:
+            raise ValueError("media publishing requires an OTH workspace root")
+        path = Path(str(media_ref)).expanduser()
+        if not path.is_absolute():
+            path = self.root / path
+        path = path.resolve()
+        root = self.root.resolve()
+        if not path.is_relative_to(root):
+            raise ValueError("media_ref must resolve inside the OTH workspace")
+        if not path.is_file():
+            raise FileNotFoundError(str(path))
+        return path
+
+    def _upload_youtube_resumable(self, token: str, file_path: Path, metadata: dict[str, Any]) -> dict[str, Any]:
+        size = file_path.stat().st_size
+        mime_type = mimetypes.guess_type(file_path.name)[0] or "video/mp4"
+        body = json.dumps(metadata).encode("utf-8")
+        start_url = "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status"
+        request = Request(
+            start_url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json; charset=UTF-8",
+                "X-Upload-Content-Type": mime_type,
+                "X-Upload-Content-Length": str(size),
+            },
+            method="POST",
+        )
+        with urlopen(request, timeout=30) as response:
+            location = response.headers.get("Location")
+            if response.status not in {200, 201} or not location:
+                raise RuntimeError(f"YouTube upload session could not be created: HTTP {response.status}")
+
+        parsed = urllib.parse.urlsplit(location)
+        connection = http.client.HTTPSConnection(parsed.netloc, timeout=120)
+        try:
+            target = parsed.path or "/"
+            if parsed.query:
+                target = f"{target}?{parsed.query}"
+            connection.putrequest("PUT", target)
+            connection.putheader("Authorization", f"Bearer {token}")
+            connection.putheader("Content-Type", mime_type)
+            connection.putheader("Content-Length", str(size))
+            connection.endheaders()
+            with file_path.open("rb") as stream:
+                while True:
+                    chunk = stream.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    connection.send(chunk)
+            response = connection.getresponse()
+            raw = response.read().decode("utf-8", errors="replace")
+            if not 200 <= response.status < 300:
+                raise RuntimeError(f"YouTube upload rejected: HTTP {response.status} {raw[:500]}")
+            return json.loads(raw) if raw else {}
+        finally:
+            connection.close()
+
+    def _publish_youtube_video(self, source: dict[str, Any]) -> SocialActionResult:
+        provider = "youtube"
+        spec = self._spec(provider)
+        media_ref = str(source.get("media_ref", "")).strip()
+        title = str(source.get("title", "")).strip()
+        description = str(source.get("description", "")).strip()
+        privacy_status = str(source.get("privacy_status", "private")).lower().strip()
+        content_id = source.get("content_id")
+        if not media_ref:
+            return SocialActionResult(False, {}, "YouTube publishing requires media_ref")
+        if not title:
+            return SocialActionResult(False, {}, "YouTube publishing requires title")
+        if privacy_status not in {"private", "unlisted", "public"}:
+            return SocialActionResult(False, {}, "privacy_status must be private, unlisted, or public")
+        token = self._token(provider, spec)
+        if not token:
+            self._update_queue(content_id, "waiting_credentials", last_error="missing_credentials")
+            return SocialActionResult(True, {
+                "provider": provider,
+                "status": "awaiting_credentials",
+                "action": "publish_video",
+            })
+        try:
+            media_path = self._resolve_media_path(media_ref)
+            metadata = {
+                "snippet": {
+                    "title": title,
+                    "description": description,
+                    "categoryId": str(source.get("category_id", "22")),
+                },
+                "status": {
+                    "privacyStatus": privacy_status,
+                },
+            }
+            response = self.video_uploader(token, media_path, metadata)
+        except FileNotFoundError as exc:
+            self._update_queue(content_id, "failed", last_error="media_not_found")
+            return SocialActionResult(False, {}, f"Media file not found: {exc}")
+        except (ValueError, OSError, RuntimeError) as exc:
+            self._update_queue(content_id, "failed", last_error="youtube_upload_error")
+            return SocialActionResult(False, {}, str(exc), retryable=False)
+        except Exception as exc:
+            self._update_queue(content_id, "dispatching", last_error=f"youtube_network_error:{exc}")
+            return SocialActionResult(False, {}, f"YouTube upload failed: {exc}", retryable=True)
+        self._update_queue(content_id, "published", external_response=response, last_error=None)
+        return SocialActionResult(True, {
+            "provider": provider,
+            "status": "published",
+            "action": "publish_video",
+            "video_id": response.get("id"),
+            "response": response,
+        })
+
     def _prepare_publish(self, provider: str, source: dict[str, Any]) -> SocialActionResult:
         limits = {
             "linkedin": {"text": 3000, "media": True, "adapter": "live_text"},
             "x": {"text": 280, "media": True, "adapter": "live_text"},
-            "youtube": {"text": 5000, "media": True, "adapter": "metadata_only"},
+            "youtube": {"text": 5000, "media": True, "adapter": "live_video"},
             "instagram": {"text": 2200, "media": True, "adapter": "queued_media"},
         }
         spec = limits.get(provider)
@@ -278,7 +394,7 @@ class SocialActionBus:
                 "media_present": bool(source.get("media_ref")),
                 "credential_required_for_live": True,
             },
-            "live_action_available": spec["adapter"] == "live_text" and provider in {"linkedin", "x"},
+            "live_action_available": (spec["adapter"] == "live_text" and provider in {"linkedin", "x"}) or (spec["adapter"] == "live_video" and provider == "youtube" and bool(source.get("media_ref"))),
         })
 
     def execute(self, action: str, payload: dict) -> SocialActionResult:
@@ -297,6 +413,10 @@ class SocialActionBus:
             return self._publish_text(
                 provider, text, source.get("actor"), source.get("content_id")
             )
+        if action == "publish_video":
+            if provider != "youtube":
+                return SocialActionResult(False, {}, "Video publishing is currently implemented for YouTube only")
+            return self._publish_youtube_video(source)
         if action == "doctor":
             providers = [provider] if provider else list(self.specs)
             results = []

@@ -50,6 +50,8 @@ class SocialControl:
                 "content": 0,
                 "queued": 0,
                 "waiting_credentials": 0,
+                "waiting_media": 0,
+                "waiting_capability": 0,
                 "dispatching": 0,
                 "published": 0,
                 "failed": 0,
@@ -115,6 +117,20 @@ class SocialControl:
                     "priority": "credential",
                     "reason": "provider_credentials_missing",
                     "count": queue["waiting_credentials"],
+                })
+            if queue.get("waiting_media", 0):
+                attention.append({
+                    "campaign_id": row["campaign_id"],
+                    "priority": "media",
+                    "reason": "media_asset_required_for_video_publish",
+                    "count": queue["waiting_media"],
+                })
+            if queue.get("waiting_capability", 0):
+                attention.append({
+                    "campaign_id": row["campaign_id"],
+                    "priority": "capability",
+                    "reason": "platform_publish_adapter_not_ready",
+                    "count": queue["waiting_capability"],
                 })
             if queue.get("failed", 0):
                 attention.append({

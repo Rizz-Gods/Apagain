@@ -141,6 +141,11 @@ class SocialContentEngine:
         platforms = source.get("platforms") or ["linkedin", "x", "youtube", "instagram"]
         variants = self._draft(market, offer, pain, proof, cta)
         variants = {name: variants[name] for name in platforms if name in variants}
+        if "youtube" in variants:
+            variants["youtube"]["media_ref"] = source.get("media_ref")
+            variants["youtube"]["privacy_status"] = source.get("privacy_status", "private")
+        if "instagram" in variants:
+            variants["instagram"]["media_ref"] = source.get("media_ref")
         package = {
             "version": 1,
             "campaign_id": campaign_id,

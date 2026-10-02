@@ -105,6 +105,44 @@ class SocialActionTests(unittest.TestCase):
                 os.environ.pop("OTH_SOCIAL_YOUTUBE_CLIENT_ID", None)
                 os.environ.pop("OTH_SOCIAL_YOUTUBE_CLIENT_SECRET", None)
 
+    def test_youtube_publish_video_uses_media_uploader(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            media = root / "data" / "media" / "demo.mp4"
+            media.parent.mkdir(parents=True, exist_ok=True)
+            media.write_bytes(b"fake-video")
+            os.environ["OTH_SOCIAL_YOUTUBE_TOKEN"] = "test-youtube-token"
+            try:
+                captured = {}
+                def uploader(token, file_path, metadata):
+                    captured["token"] = token
+                    captured["file_path"] = str(file_path)
+                    captured["metadata"] = metadata
+                    return {"id": "video-123", "status": {"uploadStatus": "uploaded"}}
+
+                queue_path = root / "data" / "social_queue.json"
+                queue_path.write_text(json.dumps({"items": [{
+                    "content_id": "yt-content",
+                    "status": "dispatching",
+                    "approval": {"status": "approved"},
+                }]}))
+                worker = SocialActionBus(root=root, video_uploader=uploader)
+                result = worker.execute("publish_video", {"input": {
+                    "provider": "youtube",
+                    "media_ref": "data/media/demo.mp4",
+                    "title": "OT H demo",
+                    "description": "demo",
+                    "privacy_status": "private",
+                    "content_id": "yt-content",
+                }})
+                self.assertTrue(result.success)
+                self.assertEqual(result.output["video_id"], "video-123")
+                self.assertEqual(captured["token"], "test-youtube-token")
+                self.assertEqual(Path(captured["file_path"]), media.resolve())
+                self.assertEqual(captured["metadata"]["status"]["privacyStatus"], "private")
+            finally:
+                os.environ.pop("OTH_SOCIAL_YOUTUBE_TOKEN", None)
+
     def test_public_publish_is_blocked_until_approved(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

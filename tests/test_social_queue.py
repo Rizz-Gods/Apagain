@@ -73,6 +73,56 @@ class SocialQueueTests(unittest.TestCase):
             )
             self.assertEqual(persisted["items"][0]["status"], "dispatching")
 
+    def test_youtube_waits_for_media_then_dispatches_video(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data" / "social_queue.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({
+                "items": [{
+                    "id": "yt-1",
+                    "content_id": "yt-content",
+                    "campaign_id": "campaign-yt",
+                    "platform": "youtube",
+                    "payload": {"title": "Demo", "description": "Demo description"},
+                    "status": "queued",
+                    "approval": {"required": True, "status": "approved"},
+                }]
+            }))
+            worker = SocialQueueManager(tmp)
+            waiting = worker.execute("reconcile", {"input": {}})
+            self.assertEqual(waiting.output["dispatches"], [])
+            data = json.loads(path.read_text())
+            self.assertEqual(data["items"][0]["status"], "waiting_media")
+
+            worker.execute("attach_media", {"input": {
+                "content_id": "yt-content",
+                "media_ref": "data/media/demo.mp4",
+            }})
+            ready = worker.execute("reconcile", {"input": {}})
+            self.assertEqual(len(ready.output["dispatches"]), 1)
+            self.assertEqual(ready.output["dispatches"][0]["action"], "publish_video")
+
+    def test_instagram_waits_for_live_capability(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data" / "social_queue.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({
+                "items": [{
+                    "id": "ig-1",
+                    "content_id": "ig-content",
+                    "campaign_id": "campaign-ig",
+                    "platform": "instagram",
+                    "payload": {"caption": "hello", "media_ref": "data/media/demo.mp4"},
+                    "status": "queued",
+                    "approval": {"required": True, "status": "approved"},
+                }]
+            }))
+            worker = SocialQueueManager(tmp)
+            result = worker.execute("reconcile", {"input": {}})
+            self.assertEqual(result.output["dispatches"], [])
+            data = json.loads(path.read_text())
+            self.assertEqual(data["items"][0]["status"], "waiting_capability")
+
     def test_reconcile_recovers_stale_dispatch(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "data" / "social_queue.json"

@@ -83,6 +83,21 @@ class SocialQueueManager:
             self._save(data)
             return SocialQueueResult(True, {"item": item})
 
+        if action == "attach_media":
+            item = self._find(data, str(source.get("content_id", "")))
+            if not item:
+                return SocialQueueResult(False, {}, "Unknown content item")
+            media_ref = str(source.get("media_ref", "")).strip()
+            if not media_ref:
+                return SocialQueueResult(False, {}, "media_ref is required")
+            item.setdefault("payload", {})["media_ref"] = media_ref
+            if item.get("status") == "waiting_media":
+                item["status"] = "queued"
+            item["last_error"] = None
+            item["updated_at"] = self._now()
+            self._save(data)
+            return SocialQueueResult(True, {"item": item})
+
         if action == "schedule":
             item = self._find(data, str(source.get("content_id", "")))
             if not item:
@@ -150,11 +165,28 @@ class SocialQueueManager:
                         held.append({"content_id": item.get("content_id"), "reason": "awaiting_approval"})
                     continue
 
+                platform = str(item.get("platform", "")).lower()
+                payload_data = item.get("payload", {}) or {}
+                if platform == "instagram":
+                    item["status"] = "waiting_capability"
+                    item["last_error"] = "live_media_adapter_not_configured"
+                    item["updated_at"] = now.isoformat()
+                    continue
+                if platform == "youtube":
+                    media_ref = payload_data.get("media_ref") or payload_data.get("media_path")
+                    if not media_ref:
+                        item["status"] = "waiting_media"
+                        item["last_error"] = "youtube_video_media_required"
+                        item["updated_at"] = now.isoformat()
+                        continue
+                    action = "publish_video"
+                else:
+                    action = "publish_text"
                 item["status"] = "dispatching"
                 item["updated_at"] = now.isoformat()
                 dispatches.append({
                     "capability": "social-actions",
-                    "action": "publish_text",
+                    "action": action,
                     "priority": 76,
                     "payload": {
                         "risk": "external",
@@ -163,13 +195,15 @@ class SocialQueueManager:
                         "input": {
                             "provider": item.get("platform"),
                             "text": (
-                                item.get("payload", {}).get("text")
-                                or item.get("payload", {}).get("caption")
-                                or item.get("payload", {}).get("description")
+                                payload_data.get("text")
+                                or payload_data.get("caption")
+                                or payload_data.get("description")
                                 or ""
                             ),
-                            "title": item.get("payload", {}).get("title"),
-                            "description": item.get("payload", {}).get("description"),
+                            "title": payload_data.get("title"),
+                            "description": payload_data.get("description"),
+                            "media_ref": payload_data.get("media_ref") or payload_data.get("media_path"),
+                            "privacy_status": payload_data.get("privacy_status", "private"),
                             "content_id": item.get("content_id"),
                             "campaign_id": item.get("campaign_id"),
                         },

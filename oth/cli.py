@@ -104,6 +104,8 @@ def main(argv=None):
     content_draft.add_argument("--proof", default="")
     content_draft.add_argument("--cta", default="")
     content_draft.add_argument("--platforms", nargs="+")
+    content_draft.add_argument("--media-ref")
+    content_draft.add_argument("--privacy-status", choices=["private", "unlisted", "public"], default="private")
     content_queue = social_content_sub.add_parser("queue")
     content_queue.add_argument("market")
     content_queue.add_argument("offer")
@@ -111,6 +113,8 @@ def main(argv=None):
     content_queue.add_argument("--proof", default="")
     content_queue.add_argument("--cta", default="")
     content_queue.add_argument("--platforms", nargs="+")
+    content_queue.add_argument("--media-ref")
+    content_queue.add_argument("--privacy-status", choices=["private", "unlisted", "public"], default="private")
     social_content_sub.add_parser("list")
     social_control = social_sub.add_parser("control")
     social_control_sub = social_control.add_subparsers(dest="control_cmd", required=True)
@@ -126,6 +130,9 @@ def main(argv=None):
     queue_schedule = social_queue_sub.add_parser("schedule")
     queue_schedule.add_argument("content_id")
     queue_schedule.add_argument("due_at")
+    queue_media = social_queue_sub.add_parser("attach-media")
+    queue_media.add_argument("content_id")
+    queue_media.add_argument("media_ref")
     queue_reject = social_queue_sub.add_parser("reject")
     queue_reject.add_argument("content_id")
     queue_reject.add_argument("--reason", default="operator_rejected")
@@ -339,6 +346,10 @@ def main(argv=None):
                     task = kernel.submit("social-queue", "schedule", {
                         "input": {"content_id": args.content_id, "due_at": args.due_at}
                     }, 72)
+                elif args.queue_cmd == "attach-media":
+                    task = kernel.submit("social-queue", "attach_media", {
+                        "input": {"content_id": args.content_id, "media_ref": args.media_ref}
+                    }, 72)
                 elif args.queue_cmd == "reject":
                     task = kernel.submit("social-queue", "reject", {
                         "input": {"content_id": args.content_id, "reason": args.reason}
@@ -357,6 +368,8 @@ def main(argv=None):
                             "proof": args.proof,
                             "cta": args.cta,
                             "platforms": args.platforms,
+                            "media_ref": args.media_ref,
+                            "privacy_status": args.privacy_status,
                         }
                     }, 70)
             elif args.social_cmd == "lead":
