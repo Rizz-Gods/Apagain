@@ -70,6 +70,16 @@
       }
     },
     {
+      "id": "social-queue",
+      "name": "Social Queue Manager",
+      "capabilities": ["social-queue"],
+      "status": "available",
+      "metadata": {
+        "mode": "social-queue",
+        "priority": 76
+      }
+    },
+    {
       "id": "social-autopilot",
       "name": "Social Autopilot",
       "capabilities": ["social-autopilot"],

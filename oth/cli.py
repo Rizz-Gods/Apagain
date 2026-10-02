@@ -112,6 +112,17 @@ def main(argv=None):
     content_queue.add_argument("--cta", default="")
     content_queue.add_argument("--platforms", nargs="+")
     social_content_sub.add_parser("list")
+    social_queue = social_sub.add_parser("queue")
+    social_queue_sub = social_queue.add_subparsers(dest="queue_cmd", required=True)
+    queue_list = social_queue_sub.add_parser("list")
+    queue_list.add_argument("--status")
+    queue_list.add_argument("--platform")
+    queue_approve = social_queue_sub.add_parser("approve")
+    queue_approve.add_argument("content_id")
+    queue_reject = social_queue_sub.add_parser("reject")
+    queue_reject.add_argument("content_id")
+    queue_reject.add_argument("--reason", default="operator_rejected")
+    queue_reconcile = social_queue_sub.add_parser("reconcile")
     social_lead = social_sub.add_parser("lead")
     social_lead_sub = social_lead.add_subparsers(dest="lead_cmd", required=True)
     lead_ingest = social_lead_sub.add_parser("ingest")
@@ -306,6 +317,21 @@ def main(argv=None):
                         "description": args.description,
                     }
                 }, 72)
+            elif args.social_cmd == "queue":
+                if args.queue_cmd == "list":
+                    task = kernel.submit("social-queue", "list", {
+                        "input": {"status": args.status, "platform": args.platform}
+                    }, 70)
+                elif args.queue_cmd == "approve":
+                    task = kernel.submit("social-queue", "approve", {
+                        "input": {"content_id": args.content_id, "approved_by": "operator"}
+                    }, 75)
+                elif args.queue_cmd == "reject":
+                    task = kernel.submit("social-queue", "reject", {
+                        "input": {"content_id": args.content_id, "reason": args.reason}
+                    }, 75)
+                else:
+                    task = kernel.submit("social-queue", "reconcile", {"input": {}}, 76)
             elif args.social_cmd == "content":
                 if args.content_cmd == "list":
                     task = kernel.submit("social-content", "list", {"input": {}}, 65)

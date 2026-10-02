@@ -23,6 +23,7 @@ from oth.core.social_accounts import SocialAccountManager
 from oth.core.social_content import SocialContentEngine
 from oth.core.social_leads import SocialLeadEngine
 from oth.core.social_autopilot import SocialAutopilot
+from oth.core.social_queue import SocialQueueManager
 from oth.core.social_optimizer import SocialOptimizer
 from oth.core.social_actions import SocialActionBus
 
@@ -88,6 +89,9 @@ class OTHKernel:
             elif mode == "social-autopilot":
                 self.workers.append(SocialAutopilot(self.root))
                 modes.add("social-autopilot")
+            elif mode == "social-queue":
+                self.workers.append(SocialQueueManager(self.root))
+                modes.add("social-queue")
             elif mode == "social-actions":
                 self.workers.append(SocialActionBus(self.root))
                 modes.add("social-actions")
@@ -123,6 +127,8 @@ class OTHKernel:
             self.workers.append(SocialLeadEngine(self.root))
         if "social-autopilot" not in modes:
             self.workers.append(SocialAutopilot(self.root))
+        if "social-queue" not in modes:
+            self.workers.append(SocialQueueManager(self.root))
         if "social-actions" not in modes:
             self.workers.append(SocialActionBus(self.root))
 
@@ -288,7 +294,8 @@ class OTHKernel:
             handoffs = task_payload.get("next") or result.output.get("next") or []
             for spec in handoffs:
                 child_payload = dict(spec.get("payload", {}))
-                child_payload["input"] = result.output
+                if "input" not in child_payload:
+                    child_payload["input"] = result.output
                 child = self.submit(
                     spec["capability"],
                     spec["action"],

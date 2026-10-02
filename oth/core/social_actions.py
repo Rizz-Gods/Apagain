@@ -3,6 +3,7 @@ import os
 import time
 import urllib.parse
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -20,7 +21,7 @@ class SocialActionBus:
     id = "social-actions"
 
     def __init__(self, root=None, requester=None):
-        self.root = root
+        self.root = Path(root) if root else None
         self.requester = requester or self._request
         self.token_store = SecureTokenStore(root) if root else None
         self.specs = {
@@ -165,12 +166,31 @@ class SocialActionBus:
         except URLError as exc:
             return SocialActionResult(False, {}, f"Network error: {exc}", retryable=True)
 
-    def _publish_text(self, provider, text, actor=None):
+    def _update_queue(self, content_id: str | None, status: str, **extra):
+        if not self.root or not content_id:
+            return
+        path = self.root / "data" / "social_queue.json"
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for item in data.get("items", []):
+                if item.get("content_id") == content_id or item.get("id") == content_id:
+                    item["status"] = status
+                    item["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    item.update(extra)
+                    break
+            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception:
+            return
+
+    def _publish_text(self, provider, text, actor=None, content_id=None):
         spec = self._spec(provider)
         if not spec or "publish_url" not in spec:
             return SocialActionResult(False, {}, f"Text publishing is not implemented for {provider}")
         token = self._token(provider, spec)
         if not token:
+            self._update_queue(content_id, "waiting_credentials", last_error="missing_credentials")
             return SocialActionResult(True, {
                 "provider": provider,
                 "status": "awaiting_credentials",
@@ -202,13 +222,21 @@ class SocialActionBus:
             status, data = self.requester(
                 "POST", spec["publish_url"], token, headers, body
             )
+            published = 200 <= status < 300
+            self._update_queue(
+                content_id,
+                "published" if published else "failed",
+                external_response=data if published else None,
+                last_error=None if published else "provider_rejected",
+            )
             return SocialActionResult(True, {
                 "provider": provider,
-                "status": "published" if 200 <= status < 300 else "rejected",
+                "status": "published" if published else "rejected",
                 "http_status": status,
                 "response": data,
             })
         except HTTPError as exc:
+            self._update_queue(content_id, "failed", last_error=f"provider_http_{exc.code}")
             return SocialActionResult(True, {
                 "provider": provider,
                 "status": "permission_or_validation_error",
@@ -216,6 +244,7 @@ class SocialActionBus:
                 "reason": "Provider rejected the live action",
             })
         except URLError as exc:
+            self._update_queue(content_id, "dispatching", last_error=f"network_error:{exc}")
             return SocialActionResult(False, {}, f"Network error: {exc}", retryable=True)
 
     def _prepare_publish(self, provider: str, source: dict[str, Any]) -> SocialActionResult:
@@ -266,7 +295,7 @@ class SocialActionBus:
             if len(text) > 30000:
                 return SocialActionResult(False, {}, "text exceeds safety limit")
             return self._publish_text(
-                provider, text, source.get("actor")
+                provider, text, source.get("actor"), source.get("content_id")
             )
         if action == "doctor":
             providers = [provider] if provider else list(self.specs)

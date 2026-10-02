@@ -44,14 +44,23 @@ class SocialActionTests(unittest.TestCase):
             return 201, {"id": "urn:li:share:demo"}
         os.environ["OTH_SOCIAL_LINKEDIN_TOKEN"] = "test-token"
         try:
-            worker = SocialActionBus(requester=requester)
-            result = worker.execute("publish_text", {
-                "input": {
-                    "provider": "linkedin",
-                    "actor": "urn:li:person:test",
-                    "text": "Hello from OTH.",
-                }
-            })
+            with tempfile.TemporaryDirectory() as tmp:
+                queue_path = Path(tmp) / "data" / "social_queue.json"
+                queue_path.parent.mkdir(parents=True, exist_ok=True)
+                queue_path.write_text(json.dumps({"items": [{
+                    "content_id": "content-test",
+                    "status": "dispatching",
+                    "approval": {"status": "approved"},
+                }]}))
+                worker = SocialActionBus(root=tmp, requester=requester)
+                result = worker.execute("publish_text", {
+                    "input": {
+                        "provider": "linkedin",
+                        "actor": "urn:li:person:test",
+                        "text": "Hello from OTH.",
+                        "content_id": "content-test",
+                    }
+                })
             self.assertTrue(result.success)
             self.assertEqual(result.output["status"], "published")
             self.assertEqual(calls[0]["method"], "POST")
