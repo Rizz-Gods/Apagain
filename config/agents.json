@@ -1,3 +1,14 @@
 {
-  "agents": []
+  "agents": [
+    {
+      "id": "hermes",
+      "name": "Hermes Agent",
+      "capabilities": ["reasoning", "research"],
+      "status": "available",
+      "metadata": {
+        "command": "hermes",
+        "oneshot_flag": "-z"
+      }
+    }
+  ]
 }

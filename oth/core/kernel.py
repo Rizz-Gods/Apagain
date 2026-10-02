@@ -4,6 +4,7 @@ from .db import Database
 from .models import Task, now_iso
 from .registry import Registry
 from oth.workers.builtin import BuiltinWorker
+from oth.workers.external import ExternalAgentWorker
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -14,6 +15,9 @@ class OTHKernel:
             self.root / "config" / "skills.json",
         )
         self.workers = [BuiltinWorker()]
+        self.workers.extend(
+            ExternalAgentWorker(agent) for agent in self.registry.load_agents()
+        )
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)
@@ -30,7 +34,10 @@ class OTHKernel:
         row = rows[0]
         self.db.update_task(task_id, "running", now_iso())
         self.db.add_event(task_id, "task.started", {}, now_iso())
-        worker = next((w for w in self.workers if w.supports(row["capability"])), None)
+        worker = next(
+            (w for w in self.workers if w.supports(row["capability"])),
+            None,
+        )
         if worker is None:
             self.db.update_task(task_id, "blocked", now_iso())
             self.db.add_event(task_id, "task.blocked", {"reason": "no_worker"}, now_iso())

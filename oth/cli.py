@@ -12,6 +12,7 @@ def main(argv=None):
     submit.add_argument("--capability", required=True)
     submit.add_argument("--action", required=True)
     submit.add_argument("--message", default="")
+    submit.add_argument("--prompt", default="")
 
     run = sub.add_parser("run")
     run.add_argument("task_id")
@@ -21,7 +22,8 @@ def main(argv=None):
     kernel = OTHKernel(ROOT)
 
     if args.cmd == "submit":
-        task = kernel.submit(args.capability, args.action, {"message": args.message})
+        payload = {"prompt": args.prompt} if args.prompt else {"message": args.message}
+        task = kernel.submit(args.capability, args.action, payload)
         print(task.id)
     elif args.cmd == "run":
         print(kernel.dispatch(args.task_id))
