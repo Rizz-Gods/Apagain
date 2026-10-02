@@ -7,7 +7,7 @@ name = "over-the-horizon"
 version = "0.1.0"
 description = "Autonomous workforce kernel for Over The Horizon"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["tzdata>=2024.1"]
 
 [project.scripts]
 oth = "oth.cli:main"

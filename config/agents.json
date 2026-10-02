@@ -120,6 +120,16 @@
       }
     },
     {
+      "id": "social-planner",
+      "name": "Social Planner",
+      "capabilities": ["social-planner"],
+      "status": "available",
+      "metadata": {
+        "mode": "social-planner",
+        "priority": 66
+      }
+    },
+    {
       "id": "media-assets",
       "name": "Media Asset Manager",
       "capabilities": ["media-assets"],

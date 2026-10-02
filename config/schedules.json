@@ -87,6 +87,17 @@
       "payload": {
         "risk": "safe"
       }
+    },
+    {
+      "id": "social-planner-30m",
+      "enabled": true,
+      "interval_seconds": 1800,
+      "capability": "social-planner",
+      "action": "plan",
+      "priority": 63,
+      "payload": {
+        "risk": "safe"
+      }
     }
   ]
 }

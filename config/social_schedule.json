@@ -1,0 +1,10 @@
+{
+  "timezone": "Asia/Kolkata",
+  "slot_gap_minutes": 60,
+  "windows": {
+    "linkedin": ["10:00", "15:00"],
+    "x": ["11:00", "17:00"],
+    "youtube": ["18:00"],
+    "instagram": ["20:00"]
+  }
+}

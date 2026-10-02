@@ -213,6 +213,10 @@ def main(argv=None):
     media_register.add_argument("media_ref")
     media_normalize = media_sub.add_parser("normalize")
     media_normalize.add_argument("media_ref")
+    social_plan = social_sub.add_parser("plan")
+    social_plan_sub = social_plan.add_subparsers(dest="plan_cmd", required=True)
+    social_plan_sub.add_parser("preview")
+    social_plan_sub.add_parser("run")
 
     schedule = sub.add_parser("schedule")
     schedule_sub = schedule.add_subparsers(dest="schedule_cmd", required=True)
@@ -385,6 +389,9 @@ def main(argv=None):
                         "description": args.description,
                     }
                 }, 72)
+            elif args.social_cmd == "plan":
+                action = "preview" if args.plan_cmd == "preview" else "plan"
+                task = kernel.submit("social-planner", action, {"input": {}}, 63)
             elif args.social_cmd == "analytics":
                 if args.analytics_cmd == "list":
                     task = kernel.submit("social-analytics", "list", {"input": {}}, 63)
