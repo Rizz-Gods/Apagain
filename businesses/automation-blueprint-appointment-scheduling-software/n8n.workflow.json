@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "54287e84-f665-4d3c-816c-3ca8443328a5",
+      "id": "18cb349b-98b1-4c58-a504-d16924bbe867",
       "name": "OTH Trigger",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -16,7 +16,7 @@
       "parameters": {
         "jsCode": "return [{ json: { step: \"capture customer request or trigger\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
       },
-      "id": "b23f5e4c-b4ee-4867-8202-b015c7ba816c",
+      "id": "7511ba47-fe5a-46a9-be86-67d249b384b2",
       "name": "OTH Step 1",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -29,7 +29,7 @@
       "parameters": {
         "jsCode": "return [{ json: { step: \"normalize and validate the incoming data\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
       },
-      "id": "ab20621f-3fdb-4760-8997-f868fe8f969d",
+      "id": "31a46124-f6e4-4cce-94f1-10c04e02547c",
       "name": "OTH Step 2",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -42,7 +42,7 @@
       "parameters": {
         "jsCode": "return [{ json: { step: \"route the work to the correct business action\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
       },
-      "id": "ef55f8b7-bd72-4c40-86dc-e53732757e0e",
+      "id": "fc54e912-b9a2-4933-9cf8-d64c9ea74e2b",
       "name": "OTH Step 3",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -55,7 +55,7 @@
       "parameters": {
         "jsCode": "return [{ json: { step: \"execute the repetitive step automatically\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
       },
-      "id": "1c165fd5-2403-48b6-9897-1fa1eaf2e292",
+      "id": "48f00eac-dfb3-42a7-87b8-1e7a14c7120e",
       "name": "OTH Step 4",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -68,7 +68,7 @@
       "parameters": {
         "jsCode": "return [{ json: { step: \"notify the operator/customer\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
       },
-      "id": "4f45e1b3-faba-4855-93ff-301e6307d3ed",
+      "id": "8152e4f1-5ecf-4fb9-9ff1-11aa577126f0",
       "name": "OTH Step 5",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -81,7 +81,7 @@
       "parameters": {
         "jsCode": "return [{ json: { step: \"log the outcome for analytics\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
       },
-      "id": "2a853383-bd8e-4d57-8bba-927bf9332c29",
+      "id": "fa7d69c3-d64a-47f9-815d-9db982af5355",
       "name": "OTH Step 6",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -162,7 +162,7 @@
   },
   "active": false,
   "settings": {},
-  "versionId": "04b1ba46-33c2-45c0-826b-1e76c33f24ff",
+  "versionId": "d45997fd-670d-4b69-8699-204c192c9efb",
   "meta": {
     "othGenerated": true
   },

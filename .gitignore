@@ -11,3 +11,4 @@ skills/candidates/
 skills/installed/
 data/schedule-state.json
 logs/*.log
+.oth-node-red/
