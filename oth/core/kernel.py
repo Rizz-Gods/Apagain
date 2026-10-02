@@ -160,7 +160,7 @@ class OTHKernel:
             task_payload["memory_context"] = "\n".join(
                 f'{m["created_at"]}: {m["content"]}' for m in memories
             )
-        if row["capability"] == "social-actions" and row["action"] in {"publish_text"}:
+        if row["capability"] == "social-actions" and row["action"] in {"publish_text", "publish_video"}:
             task_payload["risk"] = "external"
         decision = self.policy.check(task_payload)
         if not decision.allowed:

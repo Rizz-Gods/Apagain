@@ -98,6 +98,11 @@ class SocialQueueTests(unittest.TestCase):
                 "content_id": "yt-content",
                 "media_ref": "data/media/demo.mp4",
             }})
+            data = json.loads(path.read_text())
+            self.assertEqual(data["items"][0]["approval"]["status"], "pending")
+            blocked = worker.execute("reconcile", {"input": {}})
+            self.assertEqual(blocked.output["dispatches"], [])
+            worker.execute("approve", {"input": {"content_id": "yt-content"}})
             ready = worker.execute("reconcile", {"input": {}})
             self.assertEqual(len(ready.output["dispatches"]), 1)
             self.assertEqual(ready.output["dispatches"][0]["action"], "publish_video")

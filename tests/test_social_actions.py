@@ -143,6 +143,26 @@ class SocialActionTests(unittest.TestCase):
             finally:
                 os.environ.pop("OTH_SOCIAL_YOUTUBE_TOKEN", None)
 
+    def test_public_video_publish_is_blocked_until_approved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "config").mkdir()
+            (root / "data").mkdir()
+            (root / "config" / "agents.json").write_text('{"agents":[]}')
+            (root / "config" / "skills.json").write_text('{"skills":[]}')
+            (root / "config" / "tools.json").write_text('{"tools":[]}')
+            (root / "config" / "schedules.json").write_text('{"schedules":[]}')
+            (root / "config" / "policies.json").write_text(
+                '{"external_actions_require_approval":true,"financial_actions_require_approval":true}'
+            )
+            kernel = OTHKernel(root)
+            task = kernel.submit("social-actions", "publish_video", {
+                "input": {"provider": "youtube", "media_ref": "data/media/demo.mp4", "title": "demo"}
+            })
+            result = kernel.dispatch(task.id)
+            self.assertEqual(result["status"], "blocked")
+            kernel.close()
+
     def test_public_publish_is_blocked_until_approved(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

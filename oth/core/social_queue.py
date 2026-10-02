@@ -91,8 +91,12 @@ class SocialQueueManager:
             if not media_ref:
                 return SocialQueueResult(False, {}, "media_ref is required")
             item.setdefault("payload", {})["media_ref"] = media_ref
-            if item.get("status") == "waiting_media":
-                item["status"] = "queued"
+            item["approval"] = {
+                "required": True,
+                "status": "pending",
+                "reason": "media_changed_requires_reapproval",
+            }
+            item["status"] = "queued"
             item["last_error"] = None
             item["updated_at"] = self._now()
             self._save(data)
