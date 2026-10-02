@@ -123,6 +123,32 @@ class SocialAccountAndOptimizerTests(unittest.TestCase):
             self.assertEqual(data["experiments"][0]["metrics"]["qualified_leads"], 4)
             self.assertEqual(data["experiments"][0]["metrics"]["conversions"], 1)
 
+    def test_optimizer_updates_existing_content_instead_of_duplicating(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worker = SocialOptimizer(root)
+            base = {
+                "platform": "youtube",
+                "content_id": "video-1",
+                "hook": "original hook",
+                "format": "short_or_video",
+                "pillar": "pain",
+            }
+            worker.execute("record", {"input": {
+                **base,
+                "metrics": {"impressions": 1000, "engagements": 20, "qualified_leads": 1, "conversions": 0},
+            }})
+            result = worker.execute("record", {"input": {
+                **base,
+                "metrics": {"impressions": 2000, "engagements": 60, "qualified_leads": 5, "conversions": 2},
+            }})
+            self.assertTrue(result.success)
+            self.assertEqual(result.output["status"], "updated")
+            data = json.loads((root / "data" / "social_learning.json").read_text())
+            self.assertEqual(len(data["experiments"]), 1)
+            self.assertEqual(data["experiments"][0]["metrics"]["impressions"], 2000)
+            self.assertEqual(len(data["experiments"][0]["history"]), 1)
+
     def test_optimizer_recommends_from_recorded_metrics(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

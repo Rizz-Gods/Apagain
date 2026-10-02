@@ -70,19 +70,45 @@ class SocialOptimizer:
             })
         if action == "record":
             metrics = source.get("metrics", {})
-            experiment = {
-                "platform": source.get("platform", ""),
-                "content_id": source.get("content_id", ""),
-                "hook": source.get("hook", ""),
-                "format": source.get("format", ""),
-                "pillar": source.get("pillar", ""),
-                "metrics": metrics,
-                "score": self._score(metrics),
-                "recorded_at": datetime.now(timezone.utc).isoformat(),
-            }
-            data["experiments"].append(experiment)
+            platform = source.get("platform", "")
+            content_id = source.get("content_id", "")
+            now = datetime.now(timezone.utc).isoformat()
+            existing = next((
+                x for x in data["experiments"]
+                if x.get("platform") == platform and x.get("content_id") == content_id
+            ), None)
+            if existing:
+                existing.setdefault("history", []).append({
+                    "metrics": dict(existing.get("metrics", {})),
+                    "score": existing.get("score", 0),
+                    "recorded_at": existing.get("recorded_at"),
+                })
+                existing.update({
+                    "hook": source.get("hook", existing.get("hook", "")),
+                    "format": source.get("format", existing.get("format", "")),
+                    "pillar": source.get("pillar", existing.get("pillar", "")),
+                    "metrics": metrics,
+                    "score": self._score(metrics),
+                    "recorded_at": now,
+                })
+                experiment = existing
+                status = "updated"
+            else:
+                experiment = {
+                    "platform": platform,
+                    "content_id": content_id,
+                    "hook": source.get("hook", ""),
+                    "format": source.get("format", ""),
+                    "pillar": source.get("pillar", ""),
+                    "metrics": metrics,
+                    "score": self._score(metrics),
+                    "recorded_at": now,
+                    "history": [],
+                }
+                data["experiments"].append(experiment)
+                status = "created"
             self._save(data)
-            return OptimizationResult(True, {"experiment": experiment})
+            return OptimizationResult(True, {"experiment": experiment, "status": status})
         if action == "optimize":
             platform = source.get("platform")
             rows = [

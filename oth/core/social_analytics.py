@@ -23,6 +23,7 @@ class SocialAnalytics:
         self.root = Path(root)
         self.path = self.root / "data" / "social_metrics.json"
         self.queue = self.root / "data" / "social_queue.json"
+        self.leads = self.root / "data" / "social_leads.json"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.actions = SocialActionBus(self.root, requester=requester)
 
@@ -165,14 +166,27 @@ class SocialAnalytics:
             "errors": errors,
         })
 
+    def _funnel_metrics(self, content_id: str) -> dict[str, float]:
+        data = self._read(self.leads, {"leads": []})
+        rows = [x for x in data.get("leads", []) if x.get("content_id") == content_id]
+        return {
+            "qualified_leads": float(sum(1 for x in rows if x.get("status") in {"qualified", "converted"})),
+            "conversions": float(sum(1 for x in rows if x.get("status") == "converted")),
+        }
+
     def _store_metric(self, content_id, platform, external_id, result):
         data = self._read(self.path, {"items": []})
+        output = dict(result.output)
+        output["metrics"] = {
+            **output.get("metrics", {}),
+            **self._funnel_metrics(str(content_id)),
+        }
         record = {
             "content_id": content_id,
             "platform": platform,
             "external_id": external_id,
             "fetched_at": self._now(),
-            **result.output,
+            **output,
         }
         data["items"].append(record)
         data["items"] = [
@@ -258,7 +272,7 @@ class SocialAnalytics:
                 item["external_id"],
                 result,
             )
-            metrics = result.output.get("metrics", {})
+            metrics = record.get("metrics", {})
             return SocialAnalyticsResult(True, {
                 "record": record,
                 "next": [{
@@ -270,7 +284,8 @@ class SocialAnalytics:
                             "platform": item["platform"],
                             "content_id": item["content_id"],
                             "format": item["payload"].get("format", ""),
-                            "pillar": "acquisition",
+                            "hook": item["payload"].get("hook", ""),
+                            "pillar": item["payload"].get("pillar", "acquisition"),
                             "metrics": metrics,
                         }
                     }
@@ -305,7 +320,8 @@ class SocialAnalytics:
                                 "platform": item.get("platform"),
                                 "content_id": item.get("content_id"),
                                 "format": item.get("payload", {}).get("format", ""),
-                                "pillar": "acquisition",
+                                "hook": item.get("payload", {}).get("hook", ""),
+                                "pillar": item.get("payload", {}).get("pillar", "acquisition"),
                                 "metrics": record.get("metrics", {}),
                             }
                         },

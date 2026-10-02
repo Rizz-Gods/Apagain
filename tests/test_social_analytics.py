@@ -102,6 +102,39 @@ class SocialAnalyticsTests(unittest.TestCase):
             self.assertEqual(len(listed.output["items"]), 1)
             self.assertEqual(listed.output["items"][0]["metrics"]["impressions"], 50)
 
+    def test_fetch_enriches_metrics_with_funnel_outcomes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            leads = root / "data" / "social_leads.json"
+            leads.parent.mkdir(parents=True, exist_ok=True)
+            leads.write_text(json.dumps({"leads": [
+                {"content_id": "content-y", "status": "qualified"},
+                {"content_id": "content-y", "status": "converted"},
+            ]}))
+            os.environ["OTH_SOCIAL_YOUTUBE_TOKEN"] = "yt-test"
+            try:
+                def requester(method, url, token, headers=None, body=None):
+                    return 200, {"items": [{
+                        "id": "video-1",
+                        "statistics": {
+                            "viewCount": "1200",
+                            "likeCount": "84",
+                            "commentCount": "16",
+                        },
+                    }]}
+
+                worker = SocialAnalytics(root, requester=requester)
+                result = worker.execute("fetch", {"input": {
+                    "platform": "youtube",
+                    "external_id": "video-1",
+                    "content_id": "content-y",
+                }})
+                self.assertTrue(result.success)
+                self.assertEqual(result.output["record"]["metrics"]["qualified_leads"], 2.0)
+                self.assertEqual(result.output["record"]["metrics"]["conversions"], 1.0)
+            finally:
+                os.environ.pop("OTH_SOCIAL_YOUTUBE_TOKEN", None)
+
     def test_sync_reads_published_queue_items(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -35,6 +35,15 @@ class SocialContentEngine:
     def _slug(value: str) -> str:
         return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")[:70] or "content"
     @staticmethod
+    def _compact(text: str, limit: int) -> str:
+        text = str(text).strip()
+        if len(text) <= limit:
+            return text
+        if limit <= 3:
+            return text[:limit]
+        return text[: limit - 3].rstrip() + "..."
+
+    @staticmethod
     def _hashtags(market: str, offer: str) -> list[str]:
         words = re.findall(r"[A-Za-z0-9]+", f"{market} {offer}")
         unique = []
@@ -44,29 +53,38 @@ class SocialContentEngine:
                 unique.append(tag)
         return unique[:6]
 
-    def _draft(self, market: str, offer: str, pain: str, proof: str, cta: str) -> dict[str, Any]:
+    def _draft(self, market: str, offer: str, pain: str, proof: str, cta: str, hook: str, pillar: str) -> dict[str, Any]:
+        opening = hook.strip() or pain
         core = f"{pain}. {proof}" if proof else pain
         hashtags = self._hashtags(market, offer)
         return {
             "linkedin": {
                 "format": "text_or_carousel",
-                "text": f"{pain}\n\n{proof}\n\n{cta}\n\n{' '.join(hashtags[:4])}".strip(),
+                "hook": opening,
+                "pillar": pillar,
+                "text": f"{opening}\n\n{pain}\n\n{proof}\n\n{cta}\n\n{' '.join(hashtags[:4])}".strip(),
                 "media_brief": "Carousel: problem -> evidence -> mechanism -> CTA.",
             },
             "x": {
                 "format": "text",
-                "text": f"{pain} {proof} {cta}".strip(),
+                "hook": opening,
+                "pillar": pillar,
+                "text": f"{opening} {proof} {cta}".strip(),
                 "media_brief": "Optional single proof visual.",
             },
             "youtube": {
                 "format": "short_or_video",
-                "title": f"{offer}: {pain[:70]}",
-                "description": f"{core}\n\n{cta}\n\n{' '.join(hashtags)}",
+                "hook": opening,
+                "pillar": pillar,
+                "title": f"{opening[:70]} | {offer}",
+                "description": f"{opening}\n\n{core}\n\n{cta}\n\n{' '.join(hashtags)}",
                 "media_brief": "45-90 second explanation with one concrete proof point.",
             },
             "instagram": {
                 "format": "reel_or_carousel",
-                "caption": f"{pain}\n\n{proof}\n\n{cta}\n\n{' '.join(hashtags)}".strip(),
+                "hook": opening,
+                "pillar": pillar,
+                "caption": f"{opening}\n\n{pain}\n\n{proof}\n\n{cta}\n\n{' '.join(hashtags)}".strip(),
                 "media_brief": "Reel hook in first 2 seconds; alternative carousel with 5-7 frames.",
             },
         }
@@ -138,9 +156,14 @@ class SocialContentEngine:
         pain = str(source.get("pain", "Manual work is consuming time that should be spent growing the business.")).strip()
         proof = str(source.get("proof", "Show one concrete before/after result or measurable operational improvement.")).strip()
         cta = str(source.get("cta", f"Reply with your workflow and I'll map the first automation worth building.")).strip()
+        hook = str(source.get("hook", "")).strip() or pain
+        pillar = str(source.get("pillar", "acquisition")).strip() or "acquisition"
         platforms = source.get("platforms") or ["linkedin", "x", "youtube", "instagram"]
-        variants = self._draft(market, offer, pain, proof, cta)
+        auto_compact = bool(source.get("auto_compact", False))
+        variants = self._draft(market, offer, pain, proof, cta, hook, pillar)
         variants = {name: variants[name] for name in platforms if name in variants}
+        if auto_compact and "x" in variants:
+            variants["x"]["text"] = self._compact(variants["x"]["text"], 280)
         if "youtube" in variants:
             variants["youtube"]["media_ref"] = source.get("media_ref")
             variants["youtube"]["privacy_status"] = source.get("privacy_status", "private")
@@ -154,6 +177,8 @@ class SocialContentEngine:
             "pain": pain,
             "proof": proof,
             "cta": cta,
+            "hook": hook,
+            "pillar": pillar,
             "variants": variants,
             "claim_check": {"required": True, "status": "pending"},
             "due_at": source.get("due_at"),

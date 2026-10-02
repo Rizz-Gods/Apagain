@@ -114,6 +114,8 @@ def main(argv=None):
     content_draft.add_argument("--pain", default="")
     content_draft.add_argument("--proof", default="")
     content_draft.add_argument("--cta", default="")
+    content_draft.add_argument("--hook", default="")
+    content_draft.add_argument("--pillar", default="acquisition")
     content_draft.add_argument("--platforms", nargs="+")
     content_draft.add_argument("--media-ref")
     content_draft.add_argument("--privacy-status", choices=["private", "unlisted", "public"], default="private")
@@ -123,6 +125,8 @@ def main(argv=None):
     content_queue.add_argument("--pain", default="")
     content_queue.add_argument("--proof", default="")
     content_queue.add_argument("--cta", default="")
+    content_queue.add_argument("--hook", default="")
+    content_queue.add_argument("--pillar", default="acquisition")
     content_queue.add_argument("--platforms", nargs="+")
     content_queue.add_argument("--media-ref")
     content_queue.add_argument("--privacy-status", choices=["private", "unlisted", "public"], default="private")
@@ -431,6 +435,8 @@ def main(argv=None):
                             "pain": args.pain,
                             "proof": args.proof,
                             "cta": args.cta,
+                            "hook": args.hook,
+                            "pillar": args.pillar,
                             "platforms": args.platforms,
                             "media_ref": args.media_ref,
                             "privacy_status": args.privacy_status,

@@ -38,6 +38,31 @@ class SocialAutopilot:
     def _slug(value: str) -> str:
         return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")[:60] or "opportunity"
 
+    def _learning_hint(self, platforms: list[str]) -> dict[str, Any]:
+        path = self.root / "data" / "social_learning.json"
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        experiments = [
+            x for x in data.get("experiments", [])
+            if x.get("hook") and (not platforms or x.get("platform") in platforms)
+        ]
+        if not experiments:
+            return {}
+        experiments.sort(key=lambda x: float(x.get("score", 0)), reverse=True)
+        best = experiments[0]
+        return {
+            "hook": best.get("hook", ""),
+            "pillar": best.get("pillar", "acquisition"),
+            "format": best.get("format", ""),
+            "source_content_id": best.get("content_id"),
+            "source_platform": best.get("platform"),
+            "source_score": best.get("score"),
+        }
+
     def _candidate(self, row) -> dict[str, Any]:
         title = str(row["title"] or row["query"] or "Untitled opportunity")
         query = str(row["query"] or title)
@@ -81,6 +106,7 @@ class SocialAutopilot:
         min_score = float(source.get("min_score", 65))
         max_new = int(source.get("max_new_campaigns", 1))
         platforms = source.get("platforms") or ["linkedin", "x", "youtube", "instagram"]
+        learning_hint = self._learning_hint(platforms)
         processed = {
             c.get("opportunity_id")
             for c in state["campaigns"]
@@ -117,6 +143,9 @@ class SocialAutopilot:
                     "pain": campaign["pain"],
                     "proof": campaign["proof"],
                     "cta": campaign["cta"],
+                    "hook": learning_hint.get("hook", campaign["pain"]),
+                    "pillar": learning_hint.get("pillar", "acquisition"),
+                    "auto_compact": True,
                     "platforms": platforms,
                 }
             })
@@ -130,6 +159,7 @@ class SocialAutopilot:
                 "content_ids": [item["content_id"] for item in queued],
                 "status": "queued_for_review",
                 "created_at": datetime.now(timezone.utc).isoformat(),
+                "learning_reference": learning_hint,
             }
             state["campaigns"].append(campaign_record)
             created.append(campaign_record)
@@ -144,6 +174,7 @@ class SocialAutopilot:
         return SocialAutopilotResult(True, {
             "created_campaigns": created,
             "skipped": skipped,
+            "learning_reference": learning_hint,
             "next": [{
                 "capability": "social-leads",
                 "action": "summary",
