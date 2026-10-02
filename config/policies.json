@@ -1,0 +1,5 @@
+{
+  "default_task_permission": "safe",
+  "external_actions_require_approval": true,
+  "financial_actions_require_approval": true
+}

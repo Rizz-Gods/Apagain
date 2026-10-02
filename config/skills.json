@@ -1,0 +1,10 @@
+{
+  "skills": [
+    {
+      "id": "builtin.echo",
+      "name": "Echo task",
+      "version": "1.0.0",
+      "capabilities": ["demo"]
+    }
+  ]
+}
