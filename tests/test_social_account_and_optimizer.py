@@ -22,6 +22,17 @@ class SocialAccountAndOptimizerTests(unittest.TestCase):
             finally:
                 os.environ.pop("OTH_SOCIAL_LINKEDIN_TOKEN", None)
 
+    def test_onboard_reports_provider_specific_oauth_requirements(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worker = SocialAccountManager(root)
+            result = worker.execute("onboard", {"input": {"provider": "linkedin"}})
+            self.assertTrue(result.success)
+            item = result.output["checklist"][0]
+            self.assertEqual(item["provider"], "linkedin")
+            self.assertIn("w_member_social", item["scopes"])
+            self.assertEqual(item["next_step"], "configure_app_credentials")
+
     def test_optimizer_recommends_from_recorded_metrics(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

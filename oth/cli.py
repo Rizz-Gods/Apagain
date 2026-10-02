@@ -65,6 +65,8 @@ def main(argv=None):
     social_sub = social.add_subparsers(dest="social_cmd", required=True)
     social_setup = social_sub.add_parser("setup")
     social_setup.add_argument("--provider")
+    social_onboard = social_sub.add_parser("onboard")
+    social_onboard.add_argument("--provider")
     social_connect = social_sub.add_parser("connect")
     social_connect.add_argument("provider")
     social_connect.add_argument("--account", default="")
@@ -196,11 +198,12 @@ def main(argv=None):
             print("Dependency provisioning is currently plan-only.")
             return
         if args.cmd == "social":
-            if args.social_cmd == "setup":
+            if args.social_cmd in {"setup", "onboard"}:
                 payload = {"input": {}}
                 if args.provider:
                     payload["input"]["provider"] = args.provider
-                task = kernel.submit("social-accounts", "setup", payload, 70)
+                action = "onboard" if args.social_cmd == "onboard" else "setup"
+                task = kernel.submit("social-accounts", action, payload, 70)
             elif args.social_cmd == "connect":
                 task = kernel.submit("social-accounts", "connect", {
                     "input": {
