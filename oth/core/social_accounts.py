@@ -1,6 +1,9 @@
+import http.server
 import json
 import os
 import secrets
+import subprocess
+import sys
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -65,11 +68,13 @@ class AccountResult:
 
 class SocialAccountManager:
     id = "social-accounts"
+    OAUTH_STATE_TTL_SECONDS = 600
 
     def __init__(self, root: str | Path, requester=None):
         self.root = Path(root)
         self.path = self.root / "data" / "social_accounts.json"
         self.oauth_path = self.root / "data" / "social_oauth.json"
+        self.browser_config_path = self.root / "config" / "browser.json"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.token_store = SecureTokenStore(self.root)
         self.actions = SocialActionBus(self.root, requester=requester)
@@ -93,6 +98,30 @@ class SocialAccountManager:
     def _oauth_save(self, data: dict[str, Any]) -> None:
         self.oauth_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
+    def _browser_config(self) -> dict[str, Any]:
+        if not self.browser_config_path.exists():
+            return {}
+        try:
+            return json.loads(self.browser_config_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
+    def _launch_chrome(self, url: str) -> dict[str, Any]:
+        config = self._browser_config()
+        executable = str(config.get("chrome_executable", "")).strip()
+        profile = str(config.get("profile", "")).strip()
+        if not executable or not Path(executable).is_file():
+            return {"launched": False, "reason": "chrome_executable_unavailable"}
+        args = [executable]
+        if profile:
+            args.append(f"--user-data-dir={profile}")
+        args.append(url)
+        try:
+            subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as exc:
+            return {"launched": False, "reason": f"chrome_launch_failed:{exc}"}
+        return {"launched": True, "profile": profile or None}
+
     def _exchange_code(self, provider: str, spec: dict[str, Any], code: str, redirect_uri: str) -> dict[str, Any]:
         client_id = os.getenv(spec.get("client_id_env", ""))
         client_secret = os.getenv(spec.get("client_secret_env", ""))
@@ -114,7 +143,23 @@ class SocialAccountManager:
         with urllib.request.urlopen(request, timeout=20) as response:
             return json.loads(response.read().decode("utf-8"))
 
+    def _purge_stale_oauth(self) -> None:
+        data = self._oauth_load()
+        now = datetime.now(timezone.utc)
+        pending = data.get("pending", {})
+        active = {}
+        for state, session in pending.items():
+            try:
+                created = datetime.fromisoformat(str(session.get("created_at", "")))
+                if (now - created).total_seconds() <= self.OAUTH_STATE_TTL_SECONDS:
+                    active[state] = session
+            except Exception:
+                continue
+        if len(active) != len(pending):
+            self._oauth_save({"pending": active})
+
     def _oauth_start(self, provider: str) -> AccountResult:
+        self._purge_stale_oauth()
         spec = PROVIDERS.get(provider)
         if not spec or not spec.get("auth_url"):
             return AccountResult(False, {}, f"OAuth start is not configured for {provider}")
@@ -284,9 +329,131 @@ class SocialAccountManager:
             "capabilities": spec["capabilities"],
         })
 
+    def _oauth_browser(self, provider: str) -> AccountResult:
+        result = self._oauth_start(provider)
+        if not result.success:
+            return result
+        redirect_uri = str(result.output.get("redirect_uri", "")).strip()
+        parsed = urllib.parse.urlparse(redirect_uri)
+        listener = None
+        callback_mode = "provider_redirect"
+        if parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost"} and parsed.port:
+            callback_mode = "loopback_auto_capture"
+            listener = self._spawn_oauth_listener(provider, result.output["state"], parsed.hostname, parsed.port)
+        browser = self._launch_chrome(result.output["authorization_url"])
+        return AccountResult(True, {
+            **result.output,
+            "browser": browser,
+            "callback_mode": callback_mode,
+            "listener": listener,
+        })
+
+    def _spawn_oauth_listener(self, provider: str, state: str, host: str, port: int) -> dict[str, Any]:
+        args = [
+            sys.executable,
+            "-m",
+            "oth.cli",
+            "social",
+            "oauth-listen",
+            provider,
+            "--state",
+            state,
+            "--host",
+            host,
+            "--port",
+            str(port),
+        ]
+        try:
+            process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as exc:
+            return {"started": False, "reason": f"listener_start_failed:{exc}"}
+        return {"started": True, "pid": process.pid, "host": host, "port": port}
+
+
+    def _oauth_listen(self, provider: str, state: str, host: str, port: int, timeout_seconds: int = 300) -> AccountResult:
+        if host not in {"127.0.0.1", "localhost"}:
+            return AccountResult(False, {}, "OAuth callback listener is restricted to loopback")
+        if not 1 <= int(port) <= 65535:
+            return AccountResult(False, {}, "OAuth callback listener port is invalid")
+        manager = self
+        received: dict[str, str] = {}
+
+        class CallbackHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                parsed = urllib.parse.urlparse(self.path)
+                params = urllib.parse.parse_qs(parsed.query)
+                callback_state = str(params.get("state", [""])[0])
+                if callback_state != state:
+                    self.send_response(400)
+                    self.end_headers()
+                    self.wfile.write(b"Invalid OAuth state")
+                    return
+                if params.get("error"):
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b"Authorization was cancelled or rejected. You may close this tab.")
+                    received["error"] = str(params.get("error", [""])[0])
+                    return
+                code = str(params.get("code", [""])[0])
+                if not code:
+                    self.send_response(400)
+                    self.end_headers()
+                    self.wfile.write(b"OAuth authorization code was not provided")
+                    return
+                manager.token_store.set(f"oauth-code:{state}", {"code": code})
+                result = manager._oauth_callback(provider, state)
+                received["status"] = "connected" if result.success else (result.error or "callback_failed")
+                self.send_response(200 if result.success else 500)
+                self.end_headers()
+                self.wfile.write(
+                    b"OTH social account connected. You can close this tab."
+                    if result.success else
+                    b"OTH social account connection failed. Return to the OTH console."
+                )
+
+            def log_message(self, format, *args):
+                return
+
+        server = http.server.ThreadingHTTPServer((host, port), CallbackHandler)
+        server.timeout = 1
+        deadline = __import__("time").time() + timeout_seconds
+        try:
+            while __import__("time").time() < deadline and not received:
+                server.handle_request()
+        finally:
+            server.server_close()
+        if received.get("status") == "connected":
+            return AccountResult(True, {"provider": provider, "status": "connected", "callback_mode": "loopback_auto_capture"})
+        if received.get("error"):
+            return AccountResult(False, {"provider": provider, "status": "authorization_rejected", "error": received["error"]}, "OAuth authorization was rejected")
+        return AccountResult(False, {"provider": provider, "status": "timeout"}, "OAuth callback listener timed out")
+
     def execute(self, action: str, payload: dict) -> AccountResult:
         source = payload.get("input", {})
         provider = str(source.get("provider", "")).lower()
+        if action == "oauth_browser":
+            return self._oauth_browser(provider)
+        if action == "oauth_status":
+            self._purge_stale_oauth()
+            pending = self._oauth_load().get("pending", {})
+            return AccountResult(True, {
+                "pending": [
+                    {
+                        "state": state,
+                        "provider": session.get("provider"),
+                        "created_at": session.get("created_at"),
+                    }
+                    for state, session in pending.items()
+                ]
+            })
+        if action == "oauth_listen":
+            return self._oauth_listen(
+                provider,
+                str(source.get("state", "")),
+                str(source.get("host", "127.0.0.1")),
+                int(source.get("port", 0)),
+                int(source.get("timeout_seconds", 300)),
+            )
         if action == "oauth_callback":
             return self._oauth_callback(provider, str(source.get("state", "")))
         if action == "oauth_start":
@@ -320,6 +487,11 @@ class SocialAccountManager:
                         "probe_account"
                         if credential_present
                         else ("start_oauth" if client_id_present and redirect_present else "configure_app_credentials")
+                    ),
+                    "next_command": (
+                        f"python -m oth.cli social probe {name}"
+                        if credential_present
+                        else (f"python -m oth.cli social oauth-browser {name}" if client_id_present and redirect_present else None)
                     ),
                 })
             return AccountResult(True, {

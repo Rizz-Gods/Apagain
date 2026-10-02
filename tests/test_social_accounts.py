@@ -48,6 +48,35 @@ class SocialAccountTests(unittest.TestCase):
             self.assertEqual(result.output["status"], "awaiting_credentials")
             self.assertEqual(calls, [])
 
+    def test_oauth_browser_uses_chrome_and_loopback_listener(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            browser = root / "chrome.exe"
+            browser.write_bytes(b"fake")
+            (root / "config").mkdir(parents=True, exist_ok=True)
+            (root / "config" / "browser.json").write_text(json.dumps({
+                "chrome_executable": str(browser),
+                "profile": str(root / "profile"),
+            }))
+            os.environ["OTH_SOCIAL_LINKEDIN_CLIENT_ID"] = "client"
+            os.environ["OTH_SOCIAL_LINKEDIN_REDIRECT_URI"] = "http://127.0.0.1:49123/callback"
+            try:
+                worker = SocialAccountManager(root)
+                launched = []
+                listeners = []
+                worker._launch_chrome = lambda url: launched.append(url) or {"launched": True}
+                worker._spawn_oauth_listener = lambda provider, state, host, port: listeners.append((provider, state, host, port)) or {"started": True, "pid": 42}
+                result = worker.execute("oauth_browser", {"input": {"provider": "linkedin"}})
+                self.assertTrue(result.success)
+                self.assertEqual(result.output["callback_mode"], "loopback_auto_capture")
+                self.assertTrue(result.output["browser"]["launched"])
+                self.assertEqual(len(launched), 1)
+                self.assertEqual(listeners[0][0], "linkedin")
+                self.assertEqual(listeners[0][2:], ("127.0.0.1", 49123))
+            finally:
+                os.environ.pop("OTH_SOCIAL_LINKEDIN_CLIENT_ID", None)
+                os.environ.pop("OTH_SOCIAL_LINKEDIN_REDIRECT_URI", None)
+
     def test_linkedin_publish_uses_discovered_actor(self):
         calls = []
 

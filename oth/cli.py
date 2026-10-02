@@ -75,6 +75,15 @@ def main(argv=None):
     social_onboard.add_argument("--provider")
     social_oauth_start = social_sub.add_parser("oauth-start")
     social_oauth_start.add_argument("provider")
+    social_oauth_browser = social_sub.add_parser("oauth-browser")
+    social_oauth_browser.add_argument("provider")
+    social_oauth_status = social_sub.add_parser("oauth-status")
+    social_oauth_listen = social_sub.add_parser("oauth-listen")
+    social_oauth_listen.add_argument("provider")
+    social_oauth_listen.add_argument("--state", required=True)
+    social_oauth_listen.add_argument("--host", default="127.0.0.1")
+    social_oauth_listen.add_argument("--port", type=int, required=True)
+    social_oauth_listen.add_argument("--timeout", type=int, default=300)
     social_oauth_callback = social_sub.add_parser("oauth-callback")
     social_oauth_callback.add_argument("provider")
     social_oauth_callback.add_argument("--state", required=True)
@@ -308,6 +317,22 @@ def main(argv=None):
             if args.social_cmd == "oauth-start":
                 task = kernel.submit("social-accounts", "oauth_start", {
                     "input": {"provider": args.provider}
+                }, 72)
+            elif args.social_cmd == "oauth-browser":
+                task = kernel.submit("social-accounts", "oauth_browser", {
+                    "input": {"provider": args.provider}
+                }, 72)
+            elif args.social_cmd == "oauth-status":
+                task = kernel.submit("social-accounts", "oauth_status", {"input": {}}, 64)
+            elif args.social_cmd == "oauth-listen":
+                task = kernel.submit("social-accounts", "oauth_listen", {
+                    "input": {
+                        "provider": args.provider,
+                        "state": args.state,
+                        "host": args.host,
+                        "port": args.port,
+                        "timeout_seconds": args.timeout,
+                    }
                 }, 72)
             elif args.social_cmd == "oauth-callback":
                 SecureTokenStore(ROOT).set(
