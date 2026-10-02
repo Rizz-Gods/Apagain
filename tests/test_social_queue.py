@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from oth.core.social_queue import SocialQueueManager
@@ -30,6 +31,19 @@ class SocialQueueTests(unittest.TestCase):
             self.assertTrue(result.success)
             self.assertEqual(result.output["item"]["approval"]["status"], "approved")
             self.assertEqual(result.output["item"]["status"], "queued")
+
+    def test_schedule_holds_publish_until_due(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._seed(tmp)
+            worker = SocialQueueManager(tmp)
+            worker.execute("approve", {"input": {"content_id": "content-1"}})
+            future = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+            scheduled = worker.execute("schedule", {"input": {"content_id": "content-1", "due_at": future}})
+            self.assertTrue(scheduled.success)
+            self.assertEqual(scheduled.output["item"]["due_at"], future)
+            result = worker.execute("reconcile", {"input": {}})
+            self.assertEqual(result.output["dispatches"], [])
+            self.assertEqual(result.output["scheduled"], 1)
 
     def test_reconcile_holds_unapproved_and_spawns_approved_publish(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -83,6 +83,23 @@ class SocialQueueManager:
             self._save(data)
             return SocialQueueResult(True, {"item": item})
 
+        if action == "schedule":
+            item = self._find(data, str(source.get("content_id", "")))
+            if not item:
+                return SocialQueueResult(False, {}, "Unknown content item")
+            due_at = source.get("due_at")
+            if due_at:
+                try:
+                    datetime.fromisoformat(str(due_at))
+                except ValueError:
+                    return SocialQueueResult(False, {}, "due_at must be a valid ISO-8601 timestamp")
+            item["due_at"] = str(due_at) if due_at else None
+            item["status"] = "queued"
+            item["last_error"] = None
+            item["updated_at"] = self._now()
+            self._save(data)
+            return SocialQueueResult(True, {"item": item})
+
         if action == "requeue":
             item = self._find(data, str(source.get("content_id", "")))
             if not item:
@@ -119,6 +136,15 @@ class SocialQueueManager:
 
                 if status not in {"queued", "waiting_credentials", "failed"}:
                     continue
+                due_at = item.get("due_at")
+                if due_at:
+                    try:
+                        due_time = datetime.fromisoformat(str(due_at))
+                    except ValueError:
+                        item["last_error"] = "invalid_due_at"
+                        continue
+                    if due_time > now:
+                        continue
                 if approval != "approved":
                     if status == "queued":
                         held.append({"content_id": item.get("content_id"), "reason": "awaiting_approval"})
@@ -156,6 +182,7 @@ class SocialQueueManager:
                 "dispatches": dispatches,
                 "held": held,
                 "checked": len(data["items"]),
+                "scheduled": sum(1 for item in data["items"] if item.get("due_at") and item.get("status") == "queued"),
                 "next": dispatches,
             })
 

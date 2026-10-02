@@ -41,6 +41,7 @@ class SocialControl:
         leads = self._read(self.leads, {"leads": []}).get("leads", [])
         learning = self._read(self.learning, {"experiments": [], "insights": []})
 
+        now = datetime.now(timezone.utc)
         by_campaign = {}
         for item in items:
             key = item.get("campaign_id") or "unassigned"
@@ -53,6 +54,8 @@ class SocialControl:
                 "published": 0,
                 "failed": 0,
                 "awaiting_approval": 0,
+                "scheduled": 0,
+                "next_due_at": None,
             })
             row["content"] += 1
             status = item.get("status", "queued")
@@ -60,6 +63,16 @@ class SocialControl:
                 row[status] += 1
             if item.get("approval", {}).get("status") == "pending":
                 row["awaiting_approval"] += 1
+            due_at = item.get("due_at")
+            if due_at and status == "queued":
+                try:
+                    due_time = datetime.fromisoformat(str(due_at))
+                    if due_time > now:
+                        row["scheduled"] += 1
+                        if not row["next_due_at"] or due_time < datetime.fromisoformat(row["next_due_at"]):
+                            row["next_due_at"] = due_time.isoformat()
+                except (TypeError, ValueError):
+                    pass
 
         lead_by_campaign = {}
         for lead in leads:

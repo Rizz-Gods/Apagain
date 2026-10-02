@@ -123,6 +123,9 @@ def main(argv=None):
     queue_list.add_argument("--platform")
     queue_approve = social_queue_sub.add_parser("approve")
     queue_approve.add_argument("content_id")
+    queue_schedule = social_queue_sub.add_parser("schedule")
+    queue_schedule.add_argument("content_id")
+    queue_schedule.add_argument("due_at")
     queue_reject = social_queue_sub.add_parser("reject")
     queue_reject.add_argument("content_id")
     queue_reject.add_argument("--reason", default="operator_rejected")
@@ -332,6 +335,10 @@ def main(argv=None):
                     task = kernel.submit("social-queue", "approve", {
                         "input": {"content_id": args.content_id, "approved_by": "operator"}
                     }, 75)
+                elif args.queue_cmd == "schedule":
+                    task = kernel.submit("social-queue", "schedule", {
+                        "input": {"content_id": args.content_id, "due_at": args.due_at}
+                    }, 72)
                 elif args.queue_cmd == "reject":
                     task = kernel.submit("social-queue", "reject", {
                         "input": {"content_id": args.content_id, "reason": args.reason}

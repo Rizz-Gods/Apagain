@@ -118,6 +118,7 @@ class SocialContentEngine:
             "payload": package["variants"][platform],
             "status": "queued",
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "due_at": package.get("due_at"),
             "approval": {"required": True, "status": "pending"},
         }
         data["items"].append(item)
@@ -150,6 +151,7 @@ class SocialContentEngine:
             "cta": cta,
             "variants": variants,
             "claim_check": {"required": True, "status": "pending"},
+            "due_at": source.get("due_at"),
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
         package["qa"] = self._qa(package)
