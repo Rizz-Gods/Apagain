@@ -13,6 +13,12 @@
     "render_control": true,
     "project_control": true
   },
+  "transcription": {
+    "model": "large-v3-turbo",
+    "word_timestamps": true,
+    "vad_filter": true,
+    "preferred_device": "auto"
+  },
   "defaults": {
     "social_master": {
       "resolution": "1080x1920",

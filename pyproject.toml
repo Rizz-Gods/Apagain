@@ -7,7 +7,26 @@ name = "over-the-horizon"
 version = "0.1.0"
 description = "Autonomous workforce kernel for Over The Horizon"
 requires-python = ">=3.11"
-dependencies = ["tzdata>=2024.1"]
+dependencies = [
+  "tzdata>=2024.1",
+  "yt-dlp>=2026.8",
+  "faster-whisper>=1.2.1",
+  "av>=11,<19"
+]
+
+[project.optional-dependencies]
+desktop = [
+  "pyautogui>=0.9.54",
+  "pywinauto>=0.6.9",
+  "Pillow>=12.3"
+]
+dev = [
+  "pytest>=9"
+]
+gpu = [
+  "nvidia-cublas-cu12>=12.9,<13",
+  "nvidia-cudnn-cu12>=9.27,<10"
+]
 
 [project.scripts]
 oth = "oth.cli:main"

@@ -57,6 +57,15 @@ class ResolveBridge:
 
     def _version(self, executable: Path) -> str | None:
         try:
+            from win32api import GetFileVersionInfo, LOWORD, HIWORD
+            info = GetFileVersionInfo(str(executable), "\\")
+            ms = info.get("FileVersionMS")
+            ls = info.get("FileVersionLS")
+            if ms is not None and ls is not None:
+                return f"{HIWORD(ms)}.{LOWORD(ms)}.{HIWORD(ls)}.{LOWORD(ls)}"
+        except Exception:
+            pass
+        try:
             proc = subprocess.run(
                 [str(executable), "--version"],
                 capture_output=True, text=True, timeout=10, check=False,
@@ -105,6 +114,20 @@ class ResolveBridge:
         except Exception:
             return None, env
 
+    def _activation_dialog_open(self) -> bool:
+        try:
+            from pywinauto import Desktop
+            window = Desktop(backend="uia").window(title="Resolve")
+            if not window.exists(timeout=1):
+                return False
+            return any(
+                "Activate DaVinci Resolve Studio" in str(control.window_text())
+                for control in window.descendants()
+                if getattr(control, "window_text", None)
+            )
+        except Exception:
+            return False
+
     def _status(self) -> dict[str, Any]:
         executable = self._find_executable()
         version = self._version(executable) if executable else None
@@ -120,6 +143,7 @@ class ResolveBridge:
             "script_environment": env,
             "connected": resolve is not None,
             "project_manager_available": bool(resolve and resolve.GetProjectManager()),
+            "activation_required": bool(executable and self._activation_dialog_open()),
             "external_scripting_ready": bool(executable and scripts),
         }
 

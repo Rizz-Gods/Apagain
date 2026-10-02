@@ -28,3 +28,8 @@ logs/*.log
 workflows/social/*.json
 businesses/social-market-*/
 *.egg-info/
+data/models/
+data/media/ingest/transcription_smoke.wav
+data/media/captions/transcription_smoke.json
+data/media/captions/transcription_smoke.srt
+tools/smoke_transcribe.py

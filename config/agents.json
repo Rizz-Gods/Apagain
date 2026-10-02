@@ -162,6 +162,39 @@
       }
     },
     {
+      "id": "media-ingest",
+      "name": "Media Source Ingest",
+      "capabilities": ["media-ingest"],
+      "status": "available",
+      "metadata": {
+        "mode": "media-ingest",
+        "priority": 65,
+        "role": "source_acquisition_and_provenance"
+      }
+    },
+    {
+      "id": "media-qa",
+      "name": "Media QA",
+      "capabilities": ["media-qa"],
+      "status": "available",
+      "metadata": {
+        "mode": "media-qa",
+        "priority": 76,
+        "role": "render_validation_and_publish_safety"
+      }
+    },
+    {
+      "id": "media-transcription",
+      "name": "Media Transcription",
+      "capabilities": ["media-transcription"],
+      "status": "available",
+      "metadata": {
+        "mode": "media-transcription",
+        "priority": 73,
+        "role": "speech_to_text_and_timing"
+      }
+    },
+    {
       "id": "resolve-bridge",
       "name": "DaVinci Resolve Bridge",
       "capabilities": ["resolve-bridge"],

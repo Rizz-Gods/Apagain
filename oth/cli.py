@@ -228,6 +228,16 @@ def main(argv=None):
     media_register.add_argument("media_ref")
     media_normalize = media_sub.add_parser("normalize")
     media_normalize.add_argument("media_ref")
+    media_source = media_sub.add_parser("source-download")
+    media_source.add_argument("url")
+    media_transcribe = media_sub.add_parser("transcribe")
+    media_transcribe.add_argument("media_ref")
+    media_transcribe.add_argument("--model", default="large-v3-turbo")
+    media_qa = media_sub.add_parser("qa")
+    media_qa.add_argument("media_ref")
+    media_qa.add_argument("--resolution", default="1080x1920")
+    media_qa.add_argument("--max-duration", type=float)
+    media_qa.add_argument("--min-duration", type=float)
     social_plan = social_sub.add_parser("plan")
     social_plan_sub = social_plan.add_subparsers(dest="plan_cmd", required=True)
     social_plan_sub.add_parser("preview")
@@ -543,6 +553,23 @@ def main(argv=None):
         if args.cmd == "media":
             if args.media_cmd == "list":
                 task = kernel.submit("media-assets", "list", {"input": {}}, 65)
+            elif args.media_cmd == "source-download":
+                task = kernel.submit("media-ingest", "download", {
+                    "input": {"url": args.url}
+                }, 66)
+            elif args.media_cmd == "transcribe":
+                task = kernel.submit("media-transcription", "transcribe", {
+                    "input": {"media_ref": args.media_ref, "model": args.model}
+                }, 72)
+            elif args.media_cmd == "qa":
+                task = kernel.submit("media-qa", "check", {
+                    "input": {
+                        "media_ref": args.media_ref,
+                        "resolution": args.resolution,
+                        "max_duration_seconds": args.max_duration,
+                        "min_duration_seconds": args.min_duration,
+                    }
+                }, 75)
             else:
                 task = kernel.submit("media-assets", args.media_cmd, {
                     "input": {"media_ref": args.media_ref}

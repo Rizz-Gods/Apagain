@@ -34,6 +34,9 @@ from oth.core.social_editor import SocialEditorialDirector
 from oth.core.social_autonomy import SocialAutonomy
 from oth.core.media_producer import MediaProducer
 from oth.core.resolve_bridge import ResolveBridge
+from oth.core.media_ingest import MediaIngest
+from oth.core.media_transcription import MediaTranscription
+from oth.core.media_qa import MediaQA
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -127,6 +130,15 @@ class OTHKernel:
             elif mode == "resolve-bridge":
                 self.workers.append(ResolveBridge(self.root))
                 modes.add("resolve-bridge")
+            elif mode == "media-ingest":
+                self.workers.append(MediaIngest(self.root))
+                modes.add("media-ingest")
+            elif mode == "media-transcription":
+                self.workers.append(MediaTranscription(self.root))
+                modes.add("media-transcription")
+            elif mode == "media-qa":
+                self.workers.append(MediaQA(self.root))
+                modes.add("media-qa")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
@@ -179,6 +191,12 @@ class OTHKernel:
             self.workers.append(MediaProducer(self.root))
         if "resolve-bridge" not in modes:
             self.workers.append(ResolveBridge(self.root))
+        if "media-ingest" not in modes:
+            self.workers.append(MediaIngest(self.root))
+        if "media-transcription" not in modes:
+            self.workers.append(MediaTranscription(self.root))
+        if "media-qa" not in modes:
+            self.workers.append(MediaQA(self.root))
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)
