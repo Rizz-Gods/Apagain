@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "title": "Automation blueprint: Appointment Scheduling Software",
+  "problem": "Small businesses report that appointment scheduling is manual, expensive, and difficult to keep customers updated.",
+  "automation": "Automate the repeated intake \u2192 processing \u2192 notification loop with event-driven workflow execution and human approval only for external or irreversible actions.",
+  "workflow": [
+    "capture customer request or trigger",
+    "normalize and validate the incoming data",
+    "route the work to the correct business action",
+    "execute the repetitive step automatically",
+    "notify the operator/customer",
+    "log the outcome for analytics"
+  ],
+  "stack": [
+    "n8n",
+    "Python",
+    "official APIs",
+    "SQLite/PostgreSQL"
+  ],
+  "complexity": "low",
+  "generated_at": "2026-10-02T13:13:00.937573+00:00"
+}

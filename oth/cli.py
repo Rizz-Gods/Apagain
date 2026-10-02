@@ -44,6 +44,16 @@ def main(argv=None):
 
     sub.add_parser("tools")
     sub.add_parser("agents")
+    opp = sub.add_parser("opportunities")
+    opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
+    opp_list = opp_sub.add_parser("list")
+    opp_list.add_argument("--limit", type=int, default=20)
+    opp_top = opp_sub.add_parser("top")
+    opp_top.add_argument("--limit", type=int, default=20)
+    blue = sub.add_parser("blueprints")
+    blue.add_argument("--limit", type=int, default=20)
+    builds = sub.add_parser("builds")
+    builds.add_argument("--limit", type=int, default=20)
 
     memory = sub.add_parser("memory")
     memory_sub = memory.add_subparsers(dest="memory_cmd", required=True)
@@ -130,6 +140,21 @@ def main(argv=None):
                     "status": agent.status,
                     "health": kernel.db.agent_health(agent.id),
                 })
+            return
+        if args.cmd == "opportunities":
+            rows = (kernel.db.top_opportunities(args.limit)
+                    if args.opp_cmd == "top"
+                    else kernel.db.list_opportunities(args.limit))
+            for row in rows:
+                print(dict(row))
+            return
+        if args.cmd == "builds":
+            for row in kernel.db.list_build_artifacts(args.limit):
+                print(dict(row))
+            return
+        if args.cmd == "blueprints":
+            for row in kernel.db.list_blueprints(args.limit):
+                print(dict(row))
             return
         if args.cmd == "memory":
             rows = kernel.db.recent_memories(args.capability, 20)

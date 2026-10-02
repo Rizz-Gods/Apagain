@@ -1,3 +1,29 @@
 {
-  "schedules": []
+  "schedules": [
+    {
+      "id": "market-scout-6h",
+      "enabled": true,
+      "interval_seconds": 21600,
+      "capability": "scout",
+      "action": "scan",
+      "priority": 70,
+      "payload": {
+        "queries": [
+          "small business owners software complaints manual spreadsheets",
+          "site:reddit.com/r/smallbusiness scheduling invoicing software complaint alternative",
+          "site:reddit.com/r/entrepreneur looking for software business problem",
+          "software alternative too expensive small business"
+        ],
+        "risk": "safe",
+        "max_retries": 1,
+        "next": [
+          {
+            "capability": "review-mining",
+            "action": "mine",
+            "priority": 68
+          }
+        ]
+      }
+    }
+  ]
 }

@@ -1,0 +1,17 @@
+{
+  "name": "Automation blueprint: Appointment Scheduling Software",
+  "trigger": "event",
+  "steps": [
+    "capture customer request or trigger",
+    "normalize and validate the incoming data",
+    "route the work to the correct business action",
+    "execute the repetitive step automatically",
+    "notify the operator/customer",
+    "log the outcome for analytics"
+  ],
+  "human_approval": [
+    "external",
+    "financial",
+    "irreversible"
+  ]
+}

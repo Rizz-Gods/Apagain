@@ -4,11 +4,16 @@ from .db import Database
 from .models import Task, now_iso
 from .policy import PolicyGate
 from .registry import Registry
+from .analyst import OpportunityAnalyst
+from .automation_builder import AutomationBuilder
+from .automation_designer import AutomationDesigner
+from .review_miner import ReviewMiner
 from .skills import SkillAcquirer
 from .tools import ToolRegistry
 from oth.workers.browser import BrowserWorker
 from oth.workers.builtin import BuiltinWorker
 from oth.workers.external import ExternalAgentWorker
+from oth.core.scout import ScoutWorker
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -22,11 +27,38 @@ class OTHKernel:
         self.policy = PolicyGate(self.root / "config" / "policies.json")
         self.tools = ToolRegistry(self.root / "config" / "tools.json")
         self.workers = [BuiltinWorker()]
+        modes = set()
         for agent in self.registry.load_agents():
-            if agent.metadata.get("mode") == "browser":
+            mode = agent.metadata.get("mode")
+            if mode == "browser":
                 self.workers.append(BrowserWorker(agent))
+            elif mode == "scout":
+                self.workers.append(ScoutWorker(agent))
+                modes.add("scout")
+            elif mode == "analysis":
+                self.workers.append(OpportunityAnalyst())
+                modes.add("analysis")
+            elif mode == "review-mining":
+                self.workers.append(ReviewMiner(agent))
+                modes.add("review-mining")
+            elif mode == "automation-design":
+                self.workers.append(AutomationDesigner())
+                modes.add("automation-design")
+            elif mode == "automation-build":
+                self.workers.append(AutomationBuilder(self.root))
+                modes.add("automation-build")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
+        if "scout" not in modes:
+            self.workers.append(ScoutWorker())
+        if "analysis" not in modes:
+            self.workers.append(OpportunityAnalyst())
+        if "review-mining" not in modes:
+            self.workers.append(ReviewMiner())
+        if "automation-design" not in modes:
+            self.workers.append(AutomationDesigner())
+        if "automation-build" not in modes:
+            self.workers.append(AutomationBuilder(self.root))
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)
@@ -89,12 +121,51 @@ class OTHKernel:
             retry_scheduled = True
         if not retry_scheduled:
             self.db.update_task(task_id, status, now_iso())
+        worker_id = getattr(worker, "id", "builtin")
         self.db.record_agent_result(
-            getattr(worker, "id", "builtin"),
+            worker_id,
             result.success,
             result.error,
             now_iso(),
         )
+        if result.success and row["capability"] in ("scout", "review-mining"):
+            self.db.add_opportunities(result.output.get("signals", []))
+        if result.success and row["capability"] == "opportunity-analysis":
+            for item in result.output.get("opportunities", []):
+                signal = item.get("signal", item)
+                score = item.get("score")
+                if not isinstance(score, dict):
+                    continue
+                oid = self.db.get_opportunity_id(
+                    signal.get("source", ""), signal.get("url", ""), signal.get("query", "")
+                )
+                if oid is not None:
+                    self.db.score_opportunity(oid, score, now_iso())
+        if result.success and row["capability"] == "automation-design":
+            for item in result.output.get("blueprints", []):
+                signal = item
+                blueprint = item.get("blueprint")
+                if not isinstance(blueprint, dict):
+                    continue
+                oid = self.db.get_opportunity_id(
+                    signal.get("source", ""), signal.get("url", ""), signal.get("query", "")
+                )
+                if oid is not None:
+                    self.db.add_blueprint(oid, blueprint, now_iso())
+        if result.success and row["capability"] == "automation-build":
+            for item in result.output.get("projects", []):
+                opp = item.get("opportunity") or {}
+                oid = self.db.get_opportunity_id(
+                    opp.get("source", ""), opp.get("url", ""), opp.get("query", "")
+                )
+                if oid is not None:
+                    self.db.add_build_artifact(
+                        oid,
+                        item.get("project_path", ""),
+                        item.get("manifest", {}),
+                        "generated",
+                        now_iso(),
+                    )
         effective_status = "retry_queued" if retry_scheduled else status
         self.db.add_memory(
             "task_result",
@@ -115,7 +186,8 @@ class OTHKernel:
                           now_iso())
         spawned = []
         if result.success:
-            for spec in task_payload.get("next", []):
+            handoffs = task_payload.get("next") or result.output.get("next") or []
+            for spec in handoffs:
                 child_payload = dict(spec.get("payload", {}))
                 child_payload["input"] = result.output
                 child = self.submit(

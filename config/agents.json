@@ -22,6 +22,60 @@
         "session": "oth",
         "priority": 40
       }
+    },
+    {
+      "id": "scout",
+      "name": "Market Scout",
+      "capabilities": ["scout"],
+      "status": "available",
+      "metadata": {
+        "mode": "scout",
+        "command": "agent-browser.cmd",
+        "session": "oth-scout",
+        "priority": 60
+      }
+    },
+    {
+      "id": "opportunity-analyst",
+      "name": "Opportunity Analyst",
+      "capabilities": ["opportunity-analysis"],
+      "status": "available",
+      "metadata": {
+        "mode": "analysis",
+        "priority": 60
+      }
+    },
+    {
+      "id": "review-miner",
+      "name": "Review Miner",
+      "capabilities": ["review-mining"],
+      "status": "available",
+      "metadata": {
+        "mode": "review-mining",
+        "command": "agent-browser.cmd",
+        "session": "oth-review",
+        "priority": 65
+      }
+    },
+    {
+      "id": "automation-designer",
+      "name": "Automation Designer",
+      "capabilities": ["automation-design"],
+      "status": "available",
+      "metadata": {
+        "mode": "automation-design",
+        "priority": 60
+      }
+    },
+    {
+      "id": "automation-builder",
+      "name": "Automation Builder",
+      "capabilities": ["automation-build"],
+      "status": "available",
+      "metadata": {
+        "mode": "automation-build",
+        "priority": 55
+      }
     }
   ]
 }

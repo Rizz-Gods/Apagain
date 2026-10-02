@@ -1,5 +1,6 @@
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from .kernel import OTHKernel
 
 @dataclass
@@ -22,6 +23,11 @@ class OTHRunner:
         self.running = False
 
     def run_once(self):
+        now = datetime.now(timezone.utc)
+        self.kernel.db.reclaim_stale_tasks(
+            now.isoformat(),
+            (now - timedelta(seconds=600)).isoformat(),
+        )
         self.scheduler.tick(self.kernel)
         queued = [t for t in self.kernel.tasks() if t["status"] == "queued"]
         if not queued:

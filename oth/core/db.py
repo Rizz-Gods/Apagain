@@ -26,6 +26,50 @@ CREATE TABLE IF NOT EXISTS agent_stats (
   failures INTEGER NOT NULL DEFAULT 0, last_error TEXT,
   last_run TEXT
 );
+
+CREATE TABLE IF NOT EXISTS opportunities (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source TEXT NOT NULL,
+  query TEXT NOT NULL,
+  title TEXT,
+  url TEXT,
+  snippet TEXT,
+  signal_type TEXT NOT NULL,
+  raw TEXT NOT NULL,
+  discovered_at TEXT NOT NULL,
+  UNIQUE(source, url, query)
+);
+CREATE TABLE IF NOT EXISTS opportunity_scores (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  opportunity_id INTEGER NOT NULL UNIQUE,
+  score REAL NOT NULL,
+  demand REAL NOT NULL,
+  pain REAL NOT NULL,
+  automation REAL NOT NULL,
+  differentiation REAL NOT NULL,
+  reasons TEXT NOT NULL,
+  scored_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS automation_blueprints (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  opportunity_id INTEGER NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  problem TEXT NOT NULL,
+  automation TEXT NOT NULL,
+  workflow TEXT NOT NULL,
+  stack TEXT NOT NULL,
+  estimated_complexity TEXT NOT NULL,
+  blueprint_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS build_artifacts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  opportunity_id INTEGER NOT NULL,
+  project_path TEXT NOT NULL,
+  manifest_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 """
 
 class Database:
@@ -58,6 +102,81 @@ class Database:
             ).fetchall()
         return self.conn.execute(
             "SELECT * FROM memories ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+
+    def add_opportunities(self, signals: list[dict[str, Any]]):
+        for s in signals:
+            self.conn.execute(
+                "INSERT OR IGNORE INTO opportunities(source,query,title,url,snippet,signal_type,raw,discovered_at) VALUES(?,?,?,?,?,?,?,?)",
+                (s.get("source",""), s.get("query",""), s.get("title",""),
+                 s.get("url",""), s.get("snippet",""), s.get("signal_type","demand"),
+                 s.get("raw",""), s.get("discovered_at","")),
+            )
+        self.conn.commit()
+
+    def get_opportunity_id(self, source: str, url: str, query: str):
+        row = self.conn.execute(
+            "SELECT id FROM opportunities WHERE source=? AND url=? AND query=?",
+            (source, url, query),
+        ).fetchone()
+        return row["id"] if row else None
+
+    def list_opportunities(self, limit: int = 50):
+        return self.conn.execute(
+            "SELECT * FROM opportunities ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+
+    def score_opportunity(self, opportunity_id: int, score: dict[str, Any], scored_at: str):
+        self.conn.execute(
+            "INSERT INTO opportunity_scores(opportunity_id,score,demand,pain,automation,differentiation,reasons,scored_at) "
+            "VALUES(?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(opportunity_id) DO UPDATE SET score=excluded.score,demand=excluded.demand,"
+            "pain=excluded.pain,automation=excluded.automation,differentiation=excluded.differentiation,"
+            "reasons=excluded.reasons,scored_at=excluded.scored_at",
+            (opportunity_id, score["score"], score["demand"], score["pain"],
+             score["automation"], score["differentiation"], json.dumps(score["reasons"]), scored_at),
+        )
+        self.conn.commit()
+
+    def top_opportunities(self, limit: int = 20):
+        return self.conn.execute(
+            "SELECT o.*, s.score, s.demand, s.pain, s.automation, s.differentiation, s.reasons "
+            "FROM opportunities o JOIN opportunity_scores s ON s.opportunity_id=o.id "
+            "ORDER BY s.score DESC LIMIT ?", (limit,)
+        ).fetchall()
+
+    def add_blueprint(self, opportunity_id: int, blueprint: dict[str, Any], created_at: str):
+        self.conn.execute(
+            "INSERT INTO automation_blueprints(opportunity_id,title,problem,automation,workflow,stack,estimated_complexity,blueprint_json,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(opportunity_id) DO UPDATE SET title=excluded.title,problem=excluded.problem,"
+            "automation=excluded.automation,workflow=excluded.workflow,stack=excluded.stack,"
+            "estimated_complexity=excluded.estimated_complexity,blueprint_json=excluded.blueprint_json,"
+            "created_at=excluded.created_at",
+            (opportunity_id, blueprint["title"], blueprint["problem"],
+             blueprint["automation"], json.dumps(blueprint["workflow"]),
+             json.dumps(blueprint["stack"]), blueprint["estimated_complexity"],
+             json.dumps(blueprint), created_at),
+        )
+        self.conn.commit()
+
+    def list_blueprints(self, limit: int = 20):
+        return self.conn.execute(
+            "SELECT * FROM automation_blueprints ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+
+    def add_build_artifact(self, opportunity_id: int, project_path: str,
+                           manifest: dict[str, Any], status: str, created_at: str):
+        self.conn.execute(
+            "INSERT INTO build_artifacts(opportunity_id,project_path,manifest_json,status,created_at) "
+            "VALUES(?,?,?,?,?)",
+            (opportunity_id, project_path, json.dumps(manifest), status, created_at),
+        )
+        self.conn.commit()
+
+    def list_build_artifacts(self, limit: int = 20):
+        return self.conn.execute(
+            "SELECT * FROM build_artifacts ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
 
     def record_agent_result(self, agent_id: str, success: bool,
@@ -122,6 +241,24 @@ class Database:
             (json.dumps(payload), updated_at, task_id),
         )
         self.conn.commit()
+
+    def reclaim_stale_tasks(self, now_iso: str, cutoff_iso: str):
+        rows = self.conn.execute(
+            "SELECT id FROM tasks WHERE status='running' AND updated_at < ?",
+            (cutoff_iso,),
+        ).fetchall()
+        for row in rows:
+            self.conn.execute(
+                "UPDATE tasks SET status='failed', updated_at=? WHERE id=?",
+                (now_iso, row["id"]),
+            )
+            self.conn.execute(
+                "INSERT INTO events(task_id,kind,payload,created_at) VALUES(?,?,?,?)",
+                (row["id"], "task.lease_expired",
+                 json.dumps({"reason": "worker_lease_expired"}), now_iso),
+            )
+        self.conn.commit()
+        return len(rows)
 
     def list_tasks(self):
         return self.conn.execute(
