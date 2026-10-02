@@ -199,6 +199,9 @@ def main(argv=None):
     social_record.add_argument("--qualified-leads", type=float, default=0)
     social_record.add_argument("--conversions", type=float, default=0)
 
+    pilot = sub.add_parser("pilot")
+    pilot.add_argument("instruction", nargs="+")
+
     memory = sub.add_parser("memory")
     memory_sub = memory.add_subparsers(dest="memory_cmd", required=True)
     memory_list = memory_sub.add_parser("list")
@@ -217,6 +220,12 @@ def main(argv=None):
     social_plan_sub = social_plan.add_subparsers(dest="plan_cmd", required=True)
     social_plan_sub.add_parser("preview")
     social_plan_sub.add_parser("run")
+    social_autonomy = social_sub.add_parser("autonomy")
+    social_autonomy_sub = social_autonomy.add_subparsers(dest="autonomy_cmd", required=True)
+    social_autonomy_sub.add_parser("status")
+    social_autonomy_sub.add_parser("tick")
+    autonomy_command = social_autonomy_sub.add_parser("command")
+    autonomy_command.add_argument("instruction", nargs="+")
 
     schedule = sub.add_parser("schedule")
     schedule_sub = schedule.add_subparsers(dest="schedule_cmd", required=True)
@@ -392,6 +401,17 @@ def main(argv=None):
             elif args.social_cmd == "plan":
                 action = "preview" if args.plan_cmd == "preview" else "plan"
                 task = kernel.submit("social-planner", action, {"input": {}}, 63)
+            elif args.social_cmd == "autonomy":
+                if args.autonomy_cmd == "status":
+                    action = "status"
+                    payload = {"input": {}}
+                elif args.autonomy_cmd == "command":
+                    action = "command"
+                    payload = {"input": {"instruction": " ".join(args.instruction)}}
+                else:
+                    action = "tick"
+                    payload = {"input": {}}
+                task = kernel.submit("social-autonomy", action, payload, 88)
             elif args.social_cmd == "analytics":
                 if args.analytics_cmd == "list":
                     task = kernel.submit("social-analytics", "list", {"input": {}}, 63)
@@ -515,6 +535,12 @@ def main(argv=None):
                 task = kernel.submit("media-assets", args.media_cmd, {
                     "input": {"media_ref": args.media_ref}
                 }, 68)
+            print(json.dumps(kernel.dispatch(task.id), indent=2))
+            return
+        if args.cmd == "pilot":
+            task = kernel.submit("social-autonomy", "command", {
+                "input": {"instruction": " ".join(args.instruction)}
+            }, 90)
             print(json.dumps(kernel.dispatch(task.id), indent=2))
             return
         if args.cmd == "blueprints":

@@ -1,0 +1,34 @@
+{
+  "enabled": true,
+  "mode": "autonomous-ops",
+  "pilot": {
+    "name": "AP",
+    "authority": "highest",
+    "learning_enabled": true
+  },
+  "initiative": {
+    "tick_interval_minutes": 10,
+    "max_new_campaigns_per_tick": 1,
+    "max_editorial_briefs_per_tick": 6,
+    "max_queue_changes_per_tick": 20,
+    "max_external_actions_per_tick": 4,
+    "publish_mode": "approval",
+    "learn_from_outcomes": true
+  },
+  "decision_rules": {
+    "min_opportunity_score": 65,
+    "min_content_coverage_hours": 36,
+    "max_stale_campaign_hours": 72,
+    "replan_after_failed_publish": true,
+    "replan_after_material_metric_change": true
+  },
+  "doctrine": [
+    "Pilot intent outranks autonomous tactics.",
+    "Autonomous agents choose tactics, timing, formats, sources, and sequencing.",
+    "Agents may refine execution commands without changing the Pilot's goal.",
+    "Every public, financial, or irreversible action remains behind the policy gate.",
+    "Prefer measurable inbound demand and qualified leads over vanity reach.",
+    "Reuse winning patterns as controlled experiments, never as blind duplication.",
+    "When evidence changes, revise the plan instead of defending the old plan."
+  ]
+}

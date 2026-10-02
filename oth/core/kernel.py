@@ -30,6 +30,8 @@ from oth.core.social_actions import SocialActionBus
 from oth.core.social_analytics import SocialAnalytics
 from oth.core.media_assets import MediaAssetManager
 from oth.core.social_planner import SocialPlanner
+from oth.core.social_editor import SocialEditorialDirector
+from oth.core.social_autonomy import SocialAutonomy
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -111,6 +113,12 @@ class OTHKernel:
             elif mode == "social-planner":
                 self.workers.append(SocialPlanner(self.root))
                 modes.add("social-planner")
+            elif mode == "social-editor":
+                self.workers.append(SocialEditorialDirector(self.root))
+                modes.add("social-editor")
+            elif mode == "social-autonomy":
+                self.workers.append(SocialAutonomy(self.root))
+                modes.add("social-autonomy")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
@@ -155,6 +163,10 @@ class OTHKernel:
             self.workers.append(MediaAssetManager(self.root))
         if "social-planner" not in modes:
             self.workers.append(SocialPlanner(self.root))
+        if "social-editor" not in modes:
+            self.workers.append(SocialEditorialDirector(self.root))
+        if "social-autonomy" not in modes:
+            self.workers.append(SocialAutonomy(self.root))
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)

@@ -140,6 +140,28 @@
       }
     },
     {
+      "id": "social-editor",
+      "name": "Social Editorial Director",
+      "capabilities": ["social-editor"],
+      "status": "available",
+      "metadata": {
+        "mode": "social-editor",
+        "priority": 80,
+        "role": "creative_strategy_and_editing_direction"
+      }
+    },
+    {
+      "id": "social-autonomy",
+      "name": "Social Autonomy Director",
+      "capabilities": ["social-autonomy"],
+      "status": "available",
+      "metadata": {
+        "mode": "social-autonomy",
+        "priority": 88,
+        "role": "pilot_intent_and_autonomous_orchestration"
+      }
+    },
+    {
       "id": "social-analytics",
       "name": "Social Analytics",
       "capabilities": ["social-analytics"],

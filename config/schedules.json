@@ -98,6 +98,17 @@
       "payload": {
         "risk": "safe"
       }
+    },
+    {
+      "id": "social-autonomy-10m",
+      "enabled": true,
+      "interval_seconds": 600,
+      "capability": "social-autonomy",
+      "action": "tick",
+      "priority": 82,
+      "payload": {
+        "risk": "safe"
+      }
     }
   ]
 }
