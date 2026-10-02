@@ -4,9 +4,10 @@ import unittest
 from pathlib import Path
 
 from oth.core.kernel import OTHKernel
+from oth.core.scheduler import Scheduler
 
-class PolicyTests(unittest.TestCase):
-    def test_external_task_can_be_approved(self):
+class SchedulerTests(unittest.TestCase):
+    def test_tick_creates_due_task(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "config").mkdir()
@@ -18,12 +19,20 @@ class PolicyTests(unittest.TestCase):
                 '"financial_actions_require_approval":true}'
             )
             (root / "config" / "tools.json").write_text('{"tools":[]}')
+            (root / "config" / "schedules.json").write_text(json.dumps({
+                "schedules": [{
+                    "id": "test",
+                    "enabled": True,
+                    "interval_seconds": 60,
+                    "capability": "demo",
+                    "action": "echo",
+                    "payload": {"message": "scheduled"}
+                }]
+            }))
             kernel = OTHKernel(root)
-            task = kernel.submit("demo", "echo", {"message":"x","risk":"external"})
-            self.assertEqual(kernel.dispatch(task.id)["status"], "blocked")
-            self.assertEqual(kernel.approve(task.id)["status"], "queued")
-            payload = json.loads(kernel.db.get_task(task.id)["payload"])
-            self.assertTrue(payload["approved"])
+            created = Scheduler(root).tick(kernel)
+            self.assertEqual(len(created), 1)
+            self.assertEqual(kernel.tasks()[0]["status"], "queued")
             kernel.close()
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ class WorkerResult:
     success: bool
     output: dict[str, Any]
     error: str | None = None
+    retryable: bool = False
 
 class BuiltinWorker:
     id = "builtin"

@@ -9,3 +9,5 @@ data/skill_sources/
 data/skills-index.json
 skills/candidates/
 skills/installed/
+data/schedule-state.json
+logs/*.log

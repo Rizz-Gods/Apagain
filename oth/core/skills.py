@@ -139,3 +139,23 @@ class SkillAcquirer:
                 f'Source commit: {entry.get("commit") or "local"}\n{body}'
             )
         return "\n\n".join(chunks)[:chars]
+
+    def sync(self, repo_url: str) -> dict[str, Any]:
+        target = self.clone(repo_url)
+        before = self._git(target, "rev-parse", "HEAD")
+        subprocess.run(["git", "-C", str(target), "fetch", "--depth", "1", "origin"],
+                       check=True, capture_output=True, text=True)
+        subprocess.run(["git", "-C", str(target), "pull", "--ff-only"],
+                       check=True, capture_output=True, text=True)
+        after = self._git(target, "rev-parse", "HEAD")
+        entries = self.scan(target)
+        for entry in entries:
+            entry["source_url"] = repo_url
+        self.index(entries, self.root / "data" / "skills-index.json")
+        return {
+            "repo": str(target),
+            "before": before,
+            "after": after,
+            "changed": before != after,
+            "skill_count": len(entries),
+        }

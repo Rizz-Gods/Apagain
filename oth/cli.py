@@ -18,6 +18,7 @@ def main(argv=None):
     submit.add_argument("--message", default="")
     submit.add_argument("--prompt", default="")
     submit.add_argument("--risk", default="safe")
+    submit.add_argument("--max-retries", type=int, default=0)
 
     run = sub.add_parser("run")
     run.add_argument("task_id")
@@ -34,16 +35,61 @@ def main(argv=None):
     acquire.add_argument("--ref")
     acquire.add_argument("--install", action="store_true")
     skill_sub.add_parser("list")
+    sync = skill_sub.add_parser("sync")
+    sync.add_argument("repo")
 
     daemon = sub.add_parser("daemon")
     daemon.add_argument("--interval", type=float, default=2.0)
     daemon.add_argument("--once", action="store_true")
 
     sub.add_parser("tools")
+    sub.add_parser("agents")
+
+    memory = sub.add_parser("memory")
+    memory_sub = memory.add_subparsers(dest="memory_cmd", required=True)
+    memory_list = memory_sub.add_parser("list")
+    memory_list.add_argument("--capability")
+
+    schedule = sub.add_parser("schedule")
+    schedule_sub = schedule.add_subparsers(dest="schedule_cmd", required=True)
+    schedule_sub.add_parser("list")
+    sadd = schedule_sub.add_parser("add")
+    sadd.add_argument("id")
+    sadd.add_argument("--interval", type=float, required=True)
+    sadd.add_argument("--capability", required=True)
+    sadd.add_argument("--action", required=True)
+    sadd.add_argument("--message", default="")
+    sadd.add_argument("--prompt", default="")
+    sadd.add_argument("--risk", default="safe")
+    sadd.add_argument("--priority", type=int, default=50)
 
     args = parser.parse_args(argv)
+    if args.cmd == "schedule":
+        schedule_path = ROOT / "config" / "schedules.json"
+        config = json.loads(schedule_path.read_text(encoding="utf-8"))
+        if args.schedule_cmd == "list":
+            print(json.dumps(config, indent=2))
+        else:
+            payload = {"prompt": args.prompt} if args.prompt else {"message": args.message}
+            payload["risk"] = args.risk
+            config.setdefault("schedules", []).append({
+                "id": args.id,
+                "enabled": True,
+                "interval_seconds": args.interval,
+                "capability": args.capability,
+                "action": args.action,
+                "payload": payload,
+                "priority": args.priority
+            })
+            schedule_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+            print(json.dumps(config["schedules"][-1], indent=2))
+        return
+
     if args.cmd == "skill":
         manager = SkillAcquirer(ROOT)
+        if args.skill_cmd == "sync":
+            print(json.dumps(manager.sync(args.repo), indent=2))
+            return
         if args.skill_cmd == "acquire":
             repo = manager.clone(args.repo, args.ref)
             entries = manager.scan(repo)
@@ -75,12 +121,28 @@ def main(argv=None):
             for tool in kernel.tools.discover():
                 print(tool)
             return
+        if args.cmd == "agents":
+            for agent in kernel.registry.load_agents():
+                print({
+                    "id": agent.id,
+                    "name": agent.name,
+                    "capabilities": agent.capabilities,
+                    "status": agent.status,
+                    "health": kernel.db.agent_health(agent.id),
+                })
+            return
+        if args.cmd == "memory":
+            rows = kernel.db.recent_memories(args.capability, 20)
+            for row in rows:
+                print(dict(row))
+            return
         if args.cmd == "approve":
             print(kernel.approve(args.task_id))
             return
         if args.cmd == "submit":
             payload = {"prompt": args.prompt} if args.prompt else {"message": args.message}
             payload["risk"] = args.risk
+            payload["max_retries"] = args.max_retries
             task = kernel.submit(args.capability, args.action, payload)
             print(task.id)
         elif args.cmd == "run":

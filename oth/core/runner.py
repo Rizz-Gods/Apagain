@@ -15,11 +15,14 @@ class OTHRunner:
         self.interval = interval
         self.running = True
         self.stats = RunnerStats()
+        from .scheduler import Scheduler
+        self.scheduler = Scheduler(kernel.root)
 
     def stop(self):
         self.running = False
 
     def run_once(self):
+        self.scheduler.tick(self.kernel)
         queued = [t for t in self.kernel.tasks() if t["status"] == "queued"]
         if not queued:
             return None

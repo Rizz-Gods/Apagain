@@ -29,6 +29,12 @@
       "name": "Hermes Agent",
       "executable": "hermes",
       "capabilities": ["agent", "reasoning", "research"]
+    },
+    {
+      "id": "tool.agent-browser",
+      "name": "Agent Browser",
+      "executable": "agent-browser.cmd",
+      "capabilities": ["browser", "web_automation"]
     }
   ]
 }

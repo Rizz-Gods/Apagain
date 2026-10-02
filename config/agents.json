@@ -10,5 +10,18 @@
         "oneshot_flag": "-z"
       }
     }
+    ,
+    {
+      "id": "browser",
+      "name": "Agent Browser",
+      "capabilities": ["browser"],
+      "status": "available",
+      "metadata": {
+        "command": "agent-browser.cmd",
+        "mode": "browser",
+        "session": "oth",
+        "priority": 40
+      }
+    }
   ]
 }
