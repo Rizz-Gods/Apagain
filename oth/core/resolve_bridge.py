@@ -218,7 +218,8 @@ class ResolveBridge:
                 return ResolveResult(True, {
                     "status": "not_connected",
                     "script_environment": env,
-                    "next": "Launch Resolve and enable External Scripting Using: Local.",
+                    "next": [],
+                    "operator_note": "Launch Resolve and complete Studio activation; OTH scripting is already installed and configured.",
                 })
             return ResolveResult(True, {
                 "status": "connected",
