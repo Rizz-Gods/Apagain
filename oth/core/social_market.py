@@ -105,11 +105,51 @@ class SocialMarketWorker:
             ],
         }
         path.write_text(json.dumps(document, indent=2), encoding="utf-8")
+
+        project = self.root / "businesses" / f"social-market-{slug}"
+        project.mkdir(parents=True, exist_ok=True)
+        steps = []
+        for workflow in workflows:
+            steps.extend([f"{workflow['id']}: {step}" for step in workflow["steps"]])
+        manifest = {
+            "version": 1,
+            "title": f"Social market engine: {market}",
+            "problem": f"Build qualified buyer attention for {offer} in {market}.",
+            "automation": "Run an inbound-first social acquisition loop from market research through content, engagement, lead capture, qualification, follow-up, and measurement.",
+            "workflow": workflows,
+            "stack": ["Node-RED", "Python", "official APIs", "SQLite/PostgreSQL"],
+            "complexity": "medium",
+            "generated_at": stamp,
+        }
+        (project / "manifest.json").write_text(
+            json.dumps(manifest, indent=2), encoding="utf-8"
+        )
+        (project / "README.md").write_text(
+            f"# Social market engine: {market}\n\n"
+            f"Offer: {offer}\n\n"
+            "This project is inbound-first and approval-gated for sensitive actions.\n",
+            encoding="utf-8",
+        )
+        (project / "workflow.json").write_text(
+            json.dumps({
+                "name": manifest["title"],
+                "trigger": "scheduled_or_event",
+                "steps": steps,
+                "human_approval": document["human_approval"],
+            }, indent=2),
+            encoding="utf-8",
+        )
         return SocialMarketResult(True, {
             "market": market,
             "offer": offer,
             "platforms": platforms,
             "workflows": workflows,
             "workflow_path": str(path),
+            "project_path": str(project),
             "count": len(workflows),
+            "next": [{
+                "capability": "workflow-compile",
+                "action": "compile",
+                "priority": 57,
+            }],
         })

@@ -37,6 +37,10 @@ class SocialMarketTests(unittest.TestCase):
             self.assertEqual(data["strategy"], "inbound_first")
             self.assertEqual(len(data["workflows"]), 6)
             self.assertIn("lead", json.dumps(data).lower())
+            project = Path(result.output["project_path"])
+            self.assertTrue((project / "manifest.json").exists())
+            self.assertTrue((project / "workflow.json").exists())
+            self.assertEqual(result.output["next"][0]["capability"], "workflow-compile")
 
 if __name__ == "__main__":
     unittest.main()
