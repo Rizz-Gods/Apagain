@@ -96,6 +96,16 @@
         "mode": "promotion",
         "priority": 45
       }
+    },
+    {
+      "id": "dependency-provisioner",
+      "name": "Dependency Provisioner",
+      "capabilities": ["dependency-provision"],
+      "status": "available",
+      "metadata": {
+        "mode": "provisioning",
+        "priority": 48
+      }
     }
   ]
 }

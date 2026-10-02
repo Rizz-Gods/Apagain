@@ -7,6 +7,7 @@ from .registry import Registry
 from .analyst import OpportunityAnalyst
 from .automation_builder import AutomationBuilder
 from .automation_designer import AutomationDesigner
+from .dependency_provisioner import DependencyProvisioner
 from .promotion_gate import PromotionGate
 from .qa_validator import QAValidator
 from .review_miner import ReviewMiner
@@ -55,6 +56,9 @@ class OTHKernel:
             elif mode == "promotion":
                 self.workers.append(PromotionGate())
                 modes.add("promotion")
+            elif mode == "provisioning":
+                self.workers.append(DependencyProvisioner())
+                modes.add("provisioning")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
@@ -71,6 +75,8 @@ class OTHKernel:
             self.workers.append(QAValidator(self.root))
         if "promotion" not in modes:
             self.workers.append(PromotionGate())
+        if "provisioning" not in modes:
+            self.workers.append(DependencyProvisioner())
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)

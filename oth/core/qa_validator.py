@@ -107,11 +107,16 @@ class QAValidator:
         failed = sum(r["status"] == "failed" for r in results)
         warnings = sum(r["status"] == "warnings" for r in results)
 
+        next_stage = (
+            [{"capability": "dependency-provision", "action": "plan", "priority": 48}]
+            if warnings else
+            [{"capability": "promotion-gate", "action": "promote", "priority": 45}]
+        )
         return QAResult(True, {
             "results": results,
             "count": len(results),
             "failed": failed,
             "warnings": warnings,
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "next": [{"capability": "promotion-gate", "action": "promote", "priority": 45}],
+            "next": next_stage,
         })

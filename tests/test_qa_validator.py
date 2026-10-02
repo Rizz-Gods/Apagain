@@ -41,6 +41,8 @@ class QAValidatorTests(unittest.TestCase):
             self.assertEqual(result["status"], "succeeded")
             self.assertEqual(result["count"], 1)
             self.assertIn(result["results"][0]["status"], ("passed","warnings"))
+            if result["results"][0]["status"] == "warnings":
+                self.assertEqual(result["next"][0]["capability"], "dependency-provision")
             kernel.close()
 
 if __name__ == "__main__":

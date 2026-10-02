@@ -58,6 +58,8 @@ def main(argv=None):
     qa.add_argument("--limit", type=int, default=20)
     promotions = sub.add_parser("promotions")
     promotions.add_argument("--limit", type=int, default=20)
+    provisions = sub.add_parser("provisioning")
+    provisions.add_argument("--limit", type=int, default=20)
 
     memory = sub.add_parser("memory")
     memory_sub = memory.add_subparsers(dest="memory_cmd", required=True)
@@ -163,6 +165,9 @@ def main(argv=None):
         if args.cmd == "promotions":
             for row in kernel.db.list_promotion_results(args.limit):
                 print(dict(row))
+            return
+        if args.cmd == "provisioning":
+            print("Dependency provisioning is currently plan-only.")
             return
         if args.cmd == "blueprints":
             for row in kernel.db.list_blueprints(args.limit):
