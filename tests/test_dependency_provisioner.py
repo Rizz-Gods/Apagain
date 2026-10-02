@@ -5,7 +5,12 @@ class DependencyProvisionerTests(unittest.TestCase):
     def test_n8n_warning_creates_install_plan(self):
         worker = DependencyProvisioner()
         result = worker.execute("plan", {
-            "input": {"warnings": ["tool not installed locally: n8n"]}
+            "input": {
+                "warnings": 1,
+                "results": [{
+                    "warnings": ["tool not installed locally: n8n"]
+                }]
+            }
         })
         self.assertTrue(result.success)
         self.assertEqual(result.output["count"], 1)

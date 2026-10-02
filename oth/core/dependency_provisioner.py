@@ -31,9 +31,16 @@ class DependencyProvisioner:
     def execute(self, action: str, payload: dict) -> ProvisionResult:
         if action != "plan":
             return ProvisionResult(False, {}, f"Unsupported dependency-provision action: {action}")
-        warnings = payload.get("input", {}).get("warnings", [])
+        source = payload.get("input", {})
+        warnings = source.get("warnings")
         if not isinstance(warnings, list):
-            return ProvisionResult(False, {}, "input.warnings must be a list")
+            warnings = []
+        if not warnings:
+            for result in source.get("results", []) or []:
+                if isinstance(result, dict):
+                    nested = result.get("warnings", [])
+                    if isinstance(nested, list):
+                        warnings.extend(nested)
 
         plans = []
         for warning in warnings:

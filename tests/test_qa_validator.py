@@ -27,6 +27,11 @@ class QAValidatorTests(unittest.TestCase):
                 '{"trigger":"event","steps":["capture","notify"],'
                 '"human_approval":["external","financial","irreversible"]}'
             )
+            (project / "n8n.workflow.json").write_text(
+                '{"name":"Demo","nodes":[{"id":"1","name":"Trigger",'
+                '"type":"n8n-nodes-base.manualTrigger","typeVersion":1}],'
+                '"connections":{},"active":false}'
+            )
             (project / "README.md").write_text("# Demo")
 
             kernel = OTHKernel(root)

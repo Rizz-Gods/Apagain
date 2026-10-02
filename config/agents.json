@@ -106,6 +106,16 @@
         "mode": "provisioning",
         "priority": 48
       }
+    },
+    {
+      "id": "workflow-compiler",
+      "name": "Workflow Compiler",
+      "capabilities": ["workflow-compile"],
+      "status": "available",
+      "metadata": {
+        "mode": "compiler",
+        "priority": 52
+      }
     }
   ]
 }

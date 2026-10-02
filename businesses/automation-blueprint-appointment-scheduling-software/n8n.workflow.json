@@ -1,0 +1,170 @@
+{
+  "name": "Automation blueprint: Appointment Scheduling Software",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "54287e84-f665-4d3c-816c-3ca8443328a5",
+      "name": "OTH Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { step: \"capture customer request or trigger\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
+      },
+      "id": "b23f5e4c-b4ee-4867-8202-b015c7ba816c",
+      "name": "OTH Step 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { step: \"normalize and validate the incoming data\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
+      },
+      "id": "ab20621f-3fdb-4760-8997-f868fe8f969d",
+      "name": "OTH Step 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { step: \"route the work to the correct business action\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
+      },
+      "id": "ef55f8b7-bd72-4c40-86dc-e53732757e0e",
+      "name": "OTH Step 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { step: \"execute the repetitive step automatically\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
+      },
+      "id": "1c165fd5-2403-48b6-9897-1fa1eaf2e292",
+      "name": "OTH Step 4",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { step: \"notify the operator/customer\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
+      },
+      "id": "4f45e1b3-faba-4855-93ff-301e6307d3ed",
+      "name": "OTH Step 5",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { step: \"log the outcome for analytics\", status: 'placeholder', note: 'Replace this compiler placeholder with the domain-specific node or agent action.' } }];"
+      },
+      "id": "2a853383-bd8e-4d57-8bba-927bf9332c29",
+      "name": "OTH Step 6",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OTH Trigger": {
+      "main": [
+        [
+          {
+            "node": "OTH Step 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OTH Step 1": {
+      "main": [
+        [
+          {
+            "node": "OTH Step 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OTH Step 2": {
+      "main": [
+        [
+          {
+            "node": "OTH Step 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OTH Step 3": {
+      "main": [
+        [
+          {
+            "node": "OTH Step 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OTH Step 4": {
+      "main": [
+        [
+          {
+            "node": "OTH Step 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OTH Step 5": {
+      "main": [
+        [
+          {
+            "node": "OTH Step 6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "04b1ba46-33c2-45c0-826b-1e76c33f24ff",
+  "meta": {
+    "othGenerated": true
+  },
+  "tags": []
+}

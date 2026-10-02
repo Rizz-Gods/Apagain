@@ -107,5 +107,5 @@ class AutomationBuilder:
             "projects": projects,
             "count": len(projects),
             "rejected": rejected,
-            "next": [{"capability": "qa-validation", "action": "validate", "priority": 50}],
+            "next": [{"capability": "workflow-compile", "action": "compile", "priority": 52}],
         })

@@ -46,7 +46,7 @@ class QAValidator:
                 "errors": ["project directory missing"],
             }
 
-        required = ["manifest.json", "README.md", "workflow.json"]
+        required = ["manifest.json", "README.md", "workflow.json", "n8n.workflow.json"]
         for name in required:
             self._check(checks, f"required:{name}",
                         (project_path / name).exists())
@@ -54,9 +54,19 @@ class QAValidator:
         try:
             manifest = json.loads((project_path / "manifest.json").read_text(encoding="utf-8"))
             workflow = json.loads((project_path / "workflow.json").read_text(encoding="utf-8"))
+            n8n_workflow = json.loads((project_path / "n8n.workflow.json").read_text(encoding="utf-8"))
             self._check(checks, "manifest_schema", isinstance(manifest, dict))
             self._check(checks, "workflow_schema",
                         isinstance(workflow, dict) and isinstance(workflow.get("steps"), list))
+            self._check(
+                checks,
+                "n8n_schema",
+                isinstance(n8n_workflow, dict)
+                and isinstance(n8n_workflow.get("nodes"), list)
+                and isinstance(n8n_workflow.get("connections"), dict)
+                and n8n_workflow.get("active") is False,
+                "draft workflow must be structurally valid and inactive",
+            )
         except Exception as exc:
             errors.append(f"JSON validation failed: {exc}")
 
@@ -99,9 +109,10 @@ class QAValidator:
     def execute(self, action: str, payload: dict) -> QAResult:
         if action != "validate":
             return QAResult(False, {}, f"Unsupported qa-validation action: {action}")
-        projects = payload.get("input", {}).get("projects", [])
+        source = payload.get("input", {})
+        projects = source.get("projects") or source.get("compiled") or []
         if not isinstance(projects, list):
-            return QAResult(False, {}, "input.projects must be a list")
+            return QAResult(False, {}, "input.projects/input.compiled must be a list")
 
         results = [self._validate_project(project) for project in projects[:10]]
         failed = sum(r["status"] == "failed" for r in results)
