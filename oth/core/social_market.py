@@ -146,6 +146,11 @@ class SocialMarketWorker:
             "workflows": workflows,
             "workflow_path": str(path),
             "project_path": str(project),
+            "projects": [{
+                "project_path": str(project),
+                "title": manifest["title"],
+                "manifest": manifest,
+            }],
             "count": len(workflows),
             "next": [{
                 "capability": "workflow-compile",
