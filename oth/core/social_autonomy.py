@@ -242,8 +242,11 @@ class SocialAutonomy:
                 "payload": {"input": {"briefs": snap["editorial_briefs"][-12:]}}
             })
             decisions.append({"type": "production_gap", "reason": "production_manifests_missing"})
-        if snap["production_manifests"] and not snap["resolve"].get("installed", False):
-            decisions.append({"type": "production_dependency", "reason": "resolve_not_installed"})
+        if snap["production_manifests"]:
+            if not snap["resolve"].get("installed", False):
+                decisions.append({"type": "production_dependency", "reason": "resolve_not_installed"})
+            elif snap["resolve"].get("activation_required", False):
+                decisions.append({"type": "production_dependency", "reason": "resolve_activation_required"})
         if any(x.get("status") == "failed" for x in queue):
             if config.get("decision_rules", {}).get("replan_after_failed_publish", True):
                 initiatives.append({

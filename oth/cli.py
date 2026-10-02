@@ -218,8 +218,11 @@ def main(argv=None):
     resolve_sub.add_parser("status")
     resolve_sub.add_parser("launch")
     resolve_sub.add_parser("connect")
+    resolve_sub.add_parser("render-status")
     resolve_project = resolve_sub.add_parser("prepare")
     resolve_project.add_argument("--campaign-id")
+    resolve_render = resolve_sub.add_parser("render")
+    resolve_render.add_argument("--campaign-id")
     media = sub.add_parser("media")
     media_sub = media.add_subparsers(dest="media_cmd", required=True)
     media_sub.add_parser("list")
@@ -601,6 +604,10 @@ def main(argv=None):
                 action = "launch"
             elif args.resolve_cmd == "connect":
                 action = "connect"
+            elif args.resolve_cmd == "render-status":
+                action = "render_status"
+            elif args.resolve_cmd == "render":
+                action = "render"
             else:
                 action = "prepare_project"
             task = kernel.submit("resolve-bridge", action, {"input": {"campaign_id": getattr(args, "campaign_id", None)}}, 68)

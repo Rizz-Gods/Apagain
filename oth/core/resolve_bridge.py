@@ -205,6 +205,78 @@ class ResolveBridge:
             "render": render,
         }
 
+    def _render_project(self, manifest: dict[str, Any]) -> dict[str, Any]:
+        resolve, env = self._connect()
+        if resolve is None:
+            return {"status": "not_connected", "script_environment": env}
+        project_manager = resolve.GetProjectManager()
+        if project_manager is None:
+            return {"status": "project_manager_unavailable"}
+
+        project_name = str(manifest.get("project_name") or manifest.get("campaign_id") or "OTH Social Production")
+        project = project_manager.LoadProject(project_name)
+        if project is None:
+            return {"status": "project_not_found", "project_name": project_name}
+        timeline = project.GetCurrentTimeline()
+        if timeline is None:
+            return {"status": "timeline_not_found", "project_name": project_name}
+
+        render = manifest.get("render") or {}
+        resolution = str(render.get("resolution") or "1080x1920")
+        try:
+            width, height = [int(x) for x in resolution.lower().split("x", 1)]
+        except ValueError:
+            width, height = 1080, 1920
+        output_dir = self.root / "data" / "media" / "renders"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        file_stem = str(manifest.get("manifest_id") or project_name).replace(" ", "_")
+        settings = {
+            "SelectAllFrames": True,
+            "TargetDir": str(output_dir),
+            "CustomName": file_stem,
+            "ExportVideo": True,
+            "ExportAudio": True,
+            "Format": "mp4",
+            "VideoCodec": "H264",
+            "VideoWidth": width,
+            "VideoHeight": height,
+            "VideoFrameRate": float(render.get("frame_rate") or 30),
+            "AudioCodec": "aac",
+            "AudioSampleRate": int(render.get("audio_sample_rate") or 48000),
+        }
+        try:
+            if not project.SetRenderSettings(settings):
+                return {"status": "render_settings_rejected", "settings": settings}
+            job = project.AddRenderJob()
+            if not job:
+                return {"status": "render_job_create_failed"}
+            started = project.StartRendering(job)
+            return {
+                "status": "render_started" if started else "render_start_failed",
+                "project_name": project_name,
+                "job_id": job,
+                "output_dir": str(output_dir.relative_to(self.root)),
+                "settings": settings,
+            }
+        except Exception as exc:
+            return {"status": "render_exception", "error": str(exc)}
+
+    def _render_status(self) -> dict[str, Any]:
+        resolve, env = self._connect()
+        if resolve is None:
+            return {"status": "not_connected", "script_environment": env}
+        manager = resolve.GetProjectManager()
+        project = manager.GetCurrentProject() if manager else None
+        if project is None:
+            return {"status": "no_current_project"}
+        try:
+            return {
+                "status": "rendering" if project.IsRenderingInProgress() else "idle",
+                "job_list": project.GetRenderJobList() or [],
+            }
+        except Exception as exc:
+            return {"status": "render_status_error", "error": str(exc)}
+
     def execute(self, action: str, payload: dict) -> ResolveResult:
         source = payload.get("input", {})
         if action == "status":
@@ -282,5 +354,16 @@ class ResolveBridge:
                 return ResolveResult(True, result)
             self._save(self.state_path, {**self._status(), **result})
             return ResolveResult(True, result)
+
+        if action == "render":
+            manifest = source.get("manifest") or {}
+            result = self._render_project(manifest)
+            if result.get("status") in {"not_connected", "project_manager_unavailable"}:
+                return ResolveResult(True, result)
+            self._save(self.state_path, {**self._status(), **result})
+            return ResolveResult(True, result)
+
+        if action == "render_status":
+            return ResolveResult(True, self._render_status())
 
         return ResolveResult(False, {}, f"Unsupported resolve-bridge action: {action}")
