@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from .core.kernel import OTHKernel
@@ -10,6 +11,10 @@ from .core.secure_tokens import SecureTokenStore
 ROOT = Path(__file__).resolve().parents[1]
 
 def main(argv=None):
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="oth")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -86,6 +91,10 @@ def main(argv=None):
     social_prepare.add_argument("--media-required", action="store_true")
     social_prepare.add_argument("--title")
     social_prepare.add_argument("--description")
+    social_autopilot = social_sub.add_parser("autopilot")
+    social_autopilot.add_argument("--min-score", type=float, default=65)
+    social_autopilot.add_argument("--max-new", type=int, default=1)
+    social_autopilot.add_argument("--platforms", nargs="+")
     social_content = social_sub.add_parser("content")
     social_content_sub = social_content.add_subparsers(dest="content_cmd", required=True)
     content_draft = social_content_sub.add_parser("draft")
@@ -278,6 +287,14 @@ def main(argv=None):
                 task = kernel.submit("social-accounts", "status", {"input": {}}, 70)
             elif args.social_cmd == "doctor":
                 task = kernel.submit("social-actions", "doctor", {"input": {}}, 75)
+            elif args.social_cmd == "autopilot":
+                task = kernel.submit("social-autopilot", "run", {
+                    "input": {
+                        "min_score": args.min_score,
+                        "max_new_campaigns": args.max_new,
+                        "platforms": args.platforms,
+                    }
+                }, 74)
             elif args.social_cmd == "prepare":
                 task = kernel.submit("social-actions", "prepare_publish", {
                     "input": {

@@ -71,10 +71,47 @@ class SocialContentEngine:
             },
         }
 
+    @staticmethod
+    def _qa(package: dict[str, Any]) -> dict[str, Any]:
+        limits = {"linkedin": 3000, "x": 280, "youtube": 5000, "instagram": 2200}
+        errors = []
+        warnings = []
+        for platform, payload in package.get("variants", {}).items():
+            if platform not in limits:
+                errors.append(f"unsupported_platform:{platform}")
+                continue
+            text = str(
+                payload.get("text")
+                or payload.get("caption")
+                or payload.get("description")
+                or ""
+            ).strip()
+            if not text:
+                errors.append(f"{platform}:empty_text")
+            elif len(text) > limits[platform]:
+                errors.append(f"{platform}:text_limit_exceeded")
+            if platform == "youtube" and not str(payload.get("title", "")).strip():
+                errors.append("youtube:missing_title")
+            if "buy now" in text.lower() or "guaranteed" in text.lower():
+                warnings.append(f"{platform}:claim_review_required")
+        status = "failed" if errors else "passed"
+        return {"status": status, "errors": errors, "warnings": warnings}
+
     def _queue(self, package: dict[str, Any], platform: str) -> dict[str, Any]:
         data = self._load()
+        campaign_id = str(package.get("campaign_id", "")).strip()
+        existing = next((
+            item for item in data["items"]
+            if campaign_id
+            and item.get("campaign_id") == campaign_id
+            and item.get("platform") == platform
+        ), None)
+        if existing:
+            return existing
         item = {
             "id": f"{self._slug(package['market'])}-{platform}-{len(data['items']) + 1}",
+            "content_id": f"{self._slug(package['market'])}-{platform}-{len(data['items']) + 1}",
+            "campaign_id": campaign_id,
             "platform": platform,
             "market": package["market"],
             "offer": package["offer"],
@@ -96,6 +133,7 @@ class SocialContentEngine:
 
         market = str(source.get("market", "target market")).strip()
         offer = str(source.get("offer", "offer")).strip()
+        campaign_id = str(source.get("campaign_id", "")).strip()
         pain = str(source.get("pain", "Manual work is consuming time that should be spent growing the business.")).strip()
         proof = str(source.get("proof", "Show one concrete before/after result or measurable operational improvement.")).strip()
         cta = str(source.get("cta", f"Reply with your workflow and I'll map the first automation worth building.")).strip()
@@ -104,6 +142,7 @@ class SocialContentEngine:
         variants = {name: variants[name] for name in platforms if name in variants}
         package = {
             "version": 1,
+            "campaign_id": campaign_id,
             "market": market,
             "offer": offer,
             "pain": pain,
@@ -113,8 +152,11 @@ class SocialContentEngine:
             "claim_check": {"required": True, "status": "pending"},
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
+        package["qa"] = self._qa(package)
         queued = []
         if action == "queue":
+            if package["qa"]["status"] == "failed":
+                return SocialContentResult(False, {"package": package}, "Content QA failed")
             queued = [self._queue(package, platform) for platform in variants]
         return SocialContentResult(True, {
             "package": package,

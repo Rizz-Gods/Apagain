@@ -47,6 +47,40 @@ class SocialContentTests(unittest.TestCase):
             ))
             self.assertTrue((Path(tmp) / "data" / "social_queue.json").exists())
 
+    def test_queue_runs_content_qa_before_enqueue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worker = SocialContentEngine(tmp)
+            result = worker.execute("queue", {
+                "input": {
+                    "campaign_id": "qa-fail",
+                    "market": "B2B founders",
+                    "offer": "automation audit",
+                    "pain": "x" * 281,
+                    "proof": "",
+                    "cta": "",
+                    "platforms": ["x"],
+                }
+            })
+            self.assertFalse(result.success)
+            self.assertEqual(result.output["package"]["qa"]["status"], "failed")
+
+    def test_queue_is_idempotent_for_campaign_and_platform(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worker = SocialContentEngine(tmp)
+            payload = {
+                "input": {
+                    "campaign_id": "campaign-1",
+                    "market": "B2B founders",
+                    "offer": "automation audit",
+                    "platforms": ["linkedin"],
+                }
+            }
+            first = worker.execute("queue", payload)
+            second = worker.execute("queue", payload)
+            self.assertTrue(first.success)
+            self.assertTrue(second.success)
+            self.assertEqual(first.output["queued"][0]["content_id"], second.output["queued"][0]["content_id"])
+
     def test_prepare_publish_handles_supported_and_media_edges(self):
         worker = SocialActionBus()
         ready = worker.execute("prepare_publish", {

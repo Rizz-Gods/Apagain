@@ -24,6 +24,36 @@
           }
         ]
       }
+    },
+    {
+      "id": "social-autopilot-6h",
+      "enabled": true,
+      "interval_seconds": 21600,
+      "capability": "social-autopilot",
+      "action": "run",
+      "priority": 66,
+      "payload": {
+        "risk": "safe",
+        "min_score": 65,
+        "max_new_campaigns": 1,
+        "platforms": [
+          "linkedin",
+          "x",
+          "youtube",
+          "instagram"
+        ]
+      }
+    },
+    {
+      "id": "social-doctor-6h",
+      "enabled": true,
+      "interval_seconds": 21600,
+      "capability": "social-actions",
+      "action": "doctor",
+      "priority": 62,
+      "payload": {
+        "risk": "safe"
+      }
     }
   ]
 }

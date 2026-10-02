@@ -20,6 +20,8 @@
         "command": "agent-browser.cmd",
         "mode": "browser",
         "session": "oth",
+        "browser_executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "browser_profile": "C:\\Users\\Admin\\Documents\\Over-The-Horizon\\data\\browser_profiles\\oth",
         "priority": 40
       }
     },
@@ -32,6 +34,8 @@
         "mode": "scout",
         "command": "agent-browser.cmd",
         "session": "oth-scout",
+        "browser_executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "browser_profile": "C:\\Users\\Admin\\Documents\\Over-The-Horizon\\data\\browser_profiles\\scout",
         "priority": 60
       }
     },
@@ -63,6 +67,16 @@
       "metadata": {
         "mode": "social-optimization",
         "priority": 70
+      }
+    },
+    {
+      "id": "social-autopilot",
+      "name": "Social Autopilot",
+      "capabilities": ["social-autopilot"],
+      "status": "available",
+      "metadata": {
+        "mode": "social-autopilot",
+        "priority": 74
       }
     },
     {
@@ -114,6 +128,8 @@
         "mode": "review-mining",
         "command": "agent-browser.cmd",
         "session": "oth-review",
+        "browser_executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "browser_profile": "C:\\Users\\Admin\\Documents\\Over-The-Horizon\\data\\browser_profiles\\review",
         "priority": 65
       }
     },

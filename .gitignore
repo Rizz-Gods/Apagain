@@ -14,6 +14,8 @@ data/social_accounts.json
 data/social_learning.json
 data/social_queue.json
 data/social_leads.json
+data/social_autopilot.json
+data/browser_profiles/
 data/social_oauth.json
 data/social_tokens.secure
 logs/*.log
