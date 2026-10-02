@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "repositories": [
+    {
+      "url": "https://github.com/gohypergiant/agent-skills.git",
+      "commit": "fe1ce07cb214548a95c7ffbbb97ecef896ade972",
+      "skills": [
+        {
+          "name": "accelint-ac-to-playwright",
+          "path": "skills/accelint-ac-to-playwright",
+          "sha256": "e15ca97f5dd5cb56e43c50062d8756e56a567127a681e5e1034ad6cb2be78436"
+        },
+        {
+          "name": "accelint-architecture-doc",
+          "path": "skills/accelint-architecture-doc",
+          "sha256": "52379fad0ebdd60761f1b6acfd844e1947b9e524169b2539b5ef17be359b78c9"
+        },
+        {
+          "name": "accelint-archive-synthesis",
+          "path": "skills/accelint-archive-synthesis",
+          "sha256": "2f521ea1ba097fe7503626732fda1e0bc9b6abc5cacb39822047d11138f23670"
+        },
+        {
+          "name": "accelint-design-foundation",
+          "path": "skills/accelint-design-foundation",
+          "sha256": "69ce4214538998b457774123f2accd4555c47988f16345fb374942f3c27fb36a"
+        },
+        {
+          "name": "accelint-english-manager",
+          "path": "skills/accelint-english-manager",
+          "sha256": "5594d87fc116571434828a7478fad285f89d6615ec411523e4f15e89e5159245"
+        },
+        {
+          "name": "accelint-eval-architect",
+          "path": "skills/accelint-eval-architect",
+          "sha256": "853d0da6b8b134a3c369ed91fc12feeb2f52cdab100298d6252d92c497537873"
+        },
+        {
+          "name": "accelint-nextjs-best-practices",
+          "path": "skills/accelint-nextjs-best-practices",
+          "sha256": "061e658c6e5b839d9235c2da1bd01d7e8d3cdb07867a3981d389a1d7c21fc1fa"
+        },
+        {
+          "name": "accelint-onboard-agents",
+          "path": "skills/accelint-onboard-agents",
+          "sha256": "2ccc6b8eea875b9f08a6057ce5e31ef1f241b93358a616eb2c4bdeabfe0b8f09"
+        },
+        {
+          "name": "accelint-onboard-openspec",
+          "path": "skills/accelint-onboard-openspec",
+          "sha256": "34b6bf0520cbc4337fd57758ef78d599b42a4c70ce9386bf283cc2e490211d2a"
+        },
+        {
+          "name": "accelint-persona-review",
+          "path": "skills/accelint-persona-review",
+          "sha256": "d869ce6460464551f5c1a466eb3ff9a1a0382d80caf1df5b70411deffdc71158"
+        },
+        {
+          "name": "accelint-prompt-manager",
+          "path": "skills/accelint-prompt-manager",
+          "sha256": "7f40853fa32e720b4dd62ec842af5d161104e2088223c44198c811918ea39004"
+        },
+        {
+          "name": "accelint-qrspi-apply",
+          "path": "skills/accelint-qrspi-apply",
+          "sha256": "5ed8f52e18a9a75d5f182928044eab06ae40c500e841564a63b7afc623f8fcea"
+        },
+        {
+          "name": "accelint-qrspi-archive",
+          "path": "skills/accelint-qrspi-archive",
+          "sha256": "84deb2972b34ee3865d7ee09666bb213eda16f7a3a7a7767723aa54021e19482"
+        },
+        {
+          "name": "accelint-qrspi-propose",
+          "path": "skills/accelint-qrspi-propose",
+          "sha256": "9d29926a3a008efcd861ecf7421cba91aeef7e4e34354f533077493ffe423684"
+        },
+        {
+          "name": "accelint-react-best-practices",
+          "path": "skills/accelint-react-best-practices",
+          "sha256": "a4adba703f0371b0b066b61a69795f91ab7a4015e7688224c2b813b1b29a5536"
+        },
+        {
+          "name": "accelint-react-testing",
+          "path": "skills/accelint-react-testing",
+          "sha256": "7861eedc650b99c9f8a9760cfbd59a151df20ea0cff8fbb20fca211ef59779f2"
+        },
+        {
+          "name": "accelint-readme-writer",
+          "path": "skills/accelint-readme-writer",
+          "sha256": "00b118c465a6075dbaca600d507acb2b5418d130958f5d8cfa19a8eb8b8a19e0"
+        },
+        {
+          "name": "accelint-security-best-practices",
+          "path": "skills/accelint-security-best-practices",
+          "sha256": "afd0cb4b4bacfd1f2d992ee83986670d8e1991d58cfa33f98e26c3542eaf33b8"
+        },
+        {
+          "name": "accelint-skill-manager",
+          "path": "skills/accelint-skill-manager",
+          "sha256": "cb58cf09ce763b332be7f3884f67ca0d2d90882895512e6721485ea6ba771bc4"
+        },
+        {
+          "name": "accelint-skill-prose",
+          "path": "skills/accelint-skill-prose",
+          "sha256": "d449afb57f2ab6f60f1e7abc8f3a3ba33f02ea2a32d99d3a28180b1f6768f5f9"
+        },
+        {
+          "name": "accelint-tanstack-query-best-practices",
+          "path": "skills/accelint-tanstack-query-best-practices",
+          "sha256": "3c0e60f8e2f13cc61982e91cb78dd99dcab750add63875a6fb95993db60dcaf3"
+        },
+        {
+          "name": "accelint-ts-audit-all",
+          "path": "skills/accelint-ts-audit-all",
+          "sha256": "774329d02ca94c99ec59c07961829e951e12451aa5d7faceb4a7d1c6bdebc1e3"
+        },
+        {
+          "name": "accelint-ts-best-practices",
+          "path": "skills/accelint-ts-best-practices",
+          "sha256": "98a5977984b480f31926b60f2f884b11ea92c28f8766787445134143d48f140b"
+        },
+        {
+          "name": "accelint-ts-documentation",
+          "path": "skills/accelint-ts-documentation",
+          "sha256": "069e9e24d84ed3219b742233249fde6bfd605aa84183bbe8b9d39d35f9ee1a0c"
+        },
+        {
+          "name": "accelint-ts-performance",
+          "path": "skills/accelint-ts-performance",
+          "sha256": "545490be7c77297822de6199c612373266cf7dc1fa23154835dbe791162acf5a"
+        },
+        {
+          "name": "accelint-ts-testing",
+          "path": "skills/accelint-ts-testing",
+          "sha256": "50b8349ca08cc90f6556e59ae9ea4eb8b785a700d35f75385f65dc83b77a4651"
+        },
+        {
+          "name": "constraints-extractor",
+          "path": "skills/constraints-extractor",
+          "sha256": "f30f5cd366b92e5bc7fdc4d8c4d49fba14f88a3c20138b8e6379a39ddc04e996"
+        },
+        {
+          "name": "epistemic-mapper",
+          "path": "skills/epistemic-mapper",
+          "sha256": "7a7eaefb0c0b8e920971804dab0f44226e3d02847a8773aba010d703e966077a"
+        },
+        {
+          "name": "generate-docs",
+          "path": "skills/generate-docs",
+          "sha256": "0748b12a69b2946bbb69fed136b49fd343be861ebbcc4ad865130b4550b54cea"
+        },
+        {
+          "name": "jargon-extractor",
+          "path": "skills/jargon-extractor",
+          "sha256": "03074c739899b529a528da21d7cd797d00dc9c11c42e2a4269e96354b08c8fab"
+        },
+        {
+          "name": "skill-name",
+          "path": "skills/accelint-skill-manager/assets/skill-template",
+          "sha256": "0783a9f87d42a5009ad8b8a5b2b6d612bb222be9892f228bd2cbd9290bf97f90"
+        }
+      ]
+    }
+  ]
+}

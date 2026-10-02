@@ -5,3 +5,7 @@ __pycache__/
 *.db-shm
 *.db-wal
 .env
+data/skill_sources/
+data/skills-index.json
+skills/candidates/
+skills/installed/

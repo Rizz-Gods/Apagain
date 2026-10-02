@@ -49,6 +49,11 @@ class Database:
         )
         self.conn.commit()
 
+    def get_task(self, task_id: str):
+        return self.conn.execute(
+            "SELECT * FROM tasks WHERE id=?", (task_id,)
+        ).fetchone()
+
     def list_tasks(self):
         return self.conn.execute(
             "SELECT * FROM tasks ORDER BY priority DESC, created_at ASC"

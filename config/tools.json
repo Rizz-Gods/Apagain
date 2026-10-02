@@ -1,0 +1,34 @@
+{
+  "tools": [
+    {
+      "id": "tool.git",
+      "name": "Git",
+      "executable": "git",
+      "capabilities": ["version_control", "source_acquisition"]
+    },
+    {
+      "id": "tool.python",
+      "name": "Python",
+      "executable": "python",
+      "capabilities": ["execution", "automation"]
+    },
+    {
+      "id": "tool.node",
+      "name": "Node.js",
+      "executable": "node",
+      "capabilities": ["javascript", "automation"]
+    },
+    {
+      "id": "tool.ffmpeg",
+      "name": "FFmpeg",
+      "executable": "ffmpeg",
+      "capabilities": ["media", "video", "audio"]
+    },
+    {
+      "id": "tool.hermes",
+      "name": "Hermes Agent",
+      "executable": "hermes",
+      "capabilities": ["agent", "reasoning", "research"]
+    }
+  ]
+}

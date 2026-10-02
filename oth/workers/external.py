@@ -24,6 +24,14 @@ class ExternalAgentWorker:
         prompt = str(payload.get("prompt", ""))
         if not prompt:
             return ExternalResult(False, {}, "Missing prompt")
+        skill_context = str(payload.get("skill_context", "")).strip()
+        if skill_context:
+            prompt = (
+                "You are an OTH worker. Use the following acquired skills as "
+                "procedural context. Do not execute bundled scripts unless the "
+                "task explicitly requires it and the OTH policy permits it.\n\n"
+                f"{skill_context}\n\nTASK:\n{prompt}"
+            )
         cmd = [self.command, self.oneshot_flag, prompt]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True,
