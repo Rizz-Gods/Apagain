@@ -9,7 +9,7 @@ signal={
     "query":"appointment scheduling software complaints",
     "title":"Appointment Scheduling Software",
     "url":"https://example.test/scheduling",
-    "snippet":"Small businesses report that appointment scheduling is manual, expensive, and difficult to keep customers updated.",
+    "snippet":"Small businesses complain that appointment scheduling is manual, expensive, frustrating, difficult, slow, and time-consuming. Owners compare software alternatives and review scheduling tools and services because the repetitive workflow is hard to manage.",
     "signal_type":"review",
     "quality":1.0,
     "score":{"score":86,"demand":84,"pain":90,"automation":88,"differentiation":70,

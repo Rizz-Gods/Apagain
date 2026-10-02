@@ -26,6 +26,8 @@ class AutomationBuilderTests(unittest.TestCase):
                     "source":"test",
                     "url":"https://example.test",
                     "query":"manual scheduling",
+                    "quality":1.0,
+                    "score":{"score":80},
                     "blueprint":{
                         "title":"Automation blueprint: Manual Scheduling",
                         "problem":"Scheduling is manual",

@@ -70,6 +70,24 @@ CREATE TABLE IF NOT EXISTS build_artifacts (
   status TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS qa_results (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  opportunity_id INTEGER NOT NULL,
+  project_path TEXT NOT NULL,
+  status TEXT NOT NULL,
+  checks_json TEXT NOT NULL,
+  warnings_json TEXT NOT NULL,
+  errors_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS promotion_results (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  opportunity_id INTEGER NOT NULL,
+  project_path TEXT NOT NULL,
+  status TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 """
 
 class Database:
@@ -177,6 +195,43 @@ class Database:
     def list_build_artifacts(self, limit: int = 20):
         return self.conn.execute(
             "SELECT * FROM build_artifacts ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+
+    def add_qa_result(self, opportunity_id: int, project_path: str,
+                      status: str, checks: list, warnings: list,
+                      errors: list, created_at: str):
+        self.conn.execute(
+            "INSERT INTO qa_results(opportunity_id,project_path,status,checks_json,warnings_json,errors_json,created_at) "
+            "VALUES(?,?,?,?,?,?,?)",
+            (opportunity_id, project_path, status,
+             json.dumps(checks), json.dumps(warnings),
+             json.dumps(errors), created_at),
+        )
+        self.conn.commit()
+
+    def list_qa_results(self, limit: int = 20):
+        return self.conn.execute(
+            "SELECT * FROM qa_results ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+
+    def update_build_status(self, project_path: str, status: str):
+        self.conn.execute(
+            "UPDATE build_artifacts SET status=? WHERE project_path=?",
+            (status, project_path),
+        )
+        self.conn.commit()
+
+    def add_promotion_result(self, opportunity_id: int, project_path: str,
+                             status: str, reason: str, created_at: str):
+        self.conn.execute(
+            "INSERT INTO promotion_results(opportunity_id,project_path,status,reason,created_at) VALUES(?,?,?,?,?)",
+            (opportunity_id, project_path, status, reason, created_at),
+        )
+        self.conn.commit()
+
+    def list_promotion_results(self, limit: int = 20):
+        return self.conn.execute(
+            "SELECT * FROM promotion_results ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
 
     def record_agent_result(self, agent_id: str, success: bool,

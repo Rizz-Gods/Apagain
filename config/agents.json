@@ -76,6 +76,26 @@
         "mode": "automation-build",
         "priority": 55
       }
+    },
+    {
+      "id": "qa-validator",
+      "name": "QA Validator",
+      "capabilities": ["qa-validation"],
+      "status": "available",
+      "metadata": {
+        "mode": "qa",
+        "priority": 50
+      }
+    },
+    {
+      "id": "promotion-gate",
+      "name": "Promotion Gate",
+      "capabilities": ["promotion-gate"],
+      "status": "available",
+      "metadata": {
+        "mode": "promotion",
+        "priority": 45
+      }
     }
   ]
 }

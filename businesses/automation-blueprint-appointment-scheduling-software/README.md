@@ -1,7 +1,7 @@
 # Automation blueprint: Appointment Scheduling Software
 
 ## Problem
-Small businesses report that appointment scheduling is manual, expensive, and difficult to keep customers updated.
+Small businesses complain that appointment scheduling is manual, expensive, frustrating, difficult, slow, and time-consuming. Owners compare software alternatives and review scheduling tools and services because the repetitive workflow is hard to manage.
 
 ## Automation
 Automate the repeated intake → processing → notification loop with event-driven workflow execution and human approval only for external or irreversible actions.

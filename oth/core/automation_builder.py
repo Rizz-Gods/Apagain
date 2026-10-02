@@ -78,7 +78,19 @@ class AutomationBuilder:
         if not isinstance(blueprints, list):
             return BuildResult(False, {}, "input.blueprints must be a list")
         projects = []
+        rejected = []
         for item in blueprints[:5]:
+            quality = float(item.get("quality", 0.0) or 0.0)
+            score = item.get("score", {}) or {}
+            viability = float(score.get("score", 0.0) or 0.0)
+            if quality < 0.65 or viability < 65:
+                rejected.append({
+                    "title": item.get("title", ""),
+                    "quality": quality,
+                    "viability": viability,
+                    "reason": "candidate_quality_gate",
+                })
+                continue
             blueprint = item.get("blueprint", item)
             project = self._write_project(self.root, blueprint)
             projects.append({
@@ -94,4 +106,6 @@ class AutomationBuilder:
         return BuildResult(True, {
             "projects": projects,
             "count": len(projects),
+            "rejected": rejected,
+            "next": [{"capability": "qa-validation", "action": "validate", "priority": 50}],
         })

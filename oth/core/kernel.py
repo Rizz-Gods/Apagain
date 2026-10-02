@@ -7,6 +7,8 @@ from .registry import Registry
 from .analyst import OpportunityAnalyst
 from .automation_builder import AutomationBuilder
 from .automation_designer import AutomationDesigner
+from .promotion_gate import PromotionGate
+from .qa_validator import QAValidator
 from .review_miner import ReviewMiner
 from .skills import SkillAcquirer
 from .tools import ToolRegistry
@@ -47,6 +49,12 @@ class OTHKernel:
             elif mode == "automation-build":
                 self.workers.append(AutomationBuilder(self.root))
                 modes.add("automation-build")
+            elif mode == "qa":
+                self.workers.append(QAValidator(self.root))
+                modes.add("qa")
+            elif mode == "promotion":
+                self.workers.append(PromotionGate())
+                modes.add("promotion")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
@@ -59,6 +67,10 @@ class OTHKernel:
             self.workers.append(AutomationDesigner())
         if "automation-build" not in modes:
             self.workers.append(AutomationBuilder(self.root))
+        if "qa" not in modes:
+            self.workers.append(QAValidator(self.root))
+        if "promotion" not in modes:
+            self.workers.append(PromotionGate())
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)
@@ -166,6 +178,37 @@ class OTHKernel:
                         "generated",
                         now_iso(),
                     )
+        if result.success and row["capability"] == "qa-validation":
+            for item in result.output.get("results", []):
+                project_path = item.get("project_path", "")
+                opp = item.get("opportunity", {}) or {}
+                oid = self.db.get_opportunity_id(
+                    opp.get("source", ""), opp.get("url", ""), opp.get("query", "")
+                ) or 0
+                self.db.add_qa_result(
+                    oid,
+                    project_path,
+                    item.get("status", "failed"),
+                    item.get("checks", []),
+                    item.get("warnings", []),
+                    item.get("errors", []),
+                    now_iso(),
+                )
+        if result.success and row["capability"] == "promotion-gate":
+            for decision in result.output.get("decisions", []):
+                project_path = decision.get("project_path", "")
+                opp = decision.get("opportunity", {}) or {}
+                oid = self.db.get_opportunity_id(
+                    opp.get("source", ""), opp.get("url", ""), opp.get("query", "")
+                ) or 0
+                self.db.add_promotion_result(
+                    oid,
+                    project_path,
+                    decision.get("status", "held"),
+                    decision.get("reason", ""),
+                    now_iso(),
+                )
+                self.db.update_build_status(project_path, decision.get("status", "held"))
         effective_status = "retry_queued" if retry_scheduled else status
         self.db.add_memory(
             "task_result",

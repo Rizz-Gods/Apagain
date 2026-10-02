@@ -54,6 +54,10 @@ def main(argv=None):
     blue.add_argument("--limit", type=int, default=20)
     builds = sub.add_parser("builds")
     builds.add_argument("--limit", type=int, default=20)
+    qa = sub.add_parser("qa")
+    qa.add_argument("--limit", type=int, default=20)
+    promotions = sub.add_parser("promotions")
+    promotions.add_argument("--limit", type=int, default=20)
 
     memory = sub.add_parser("memory")
     memory_sub = memory.add_subparsers(dest="memory_cmd", required=True)
@@ -150,6 +154,14 @@ def main(argv=None):
             return
         if args.cmd == "builds":
             for row in kernel.db.list_build_artifacts(args.limit):
+                print(dict(row))
+            return
+        if args.cmd == "qa":
+            for row in kernel.db.list_qa_results(args.limit):
+                print(dict(row))
+            return
+        if args.cmd == "promotions":
+            for row in kernel.db.list_promotion_results(args.limit):
                 print(dict(row))
             return
         if args.cmd == "blueprints":
