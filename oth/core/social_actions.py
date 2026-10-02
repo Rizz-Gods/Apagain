@@ -1,9 +1,13 @@
 import json
 import os
+import time
+import urllib.parse
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from oth.core.secure_tokens import SecureTokenStore
 
 @dataclass
 class SocialActionResult:
@@ -18,6 +22,7 @@ class SocialActionBus:
     def __init__(self, root=None, requester=None):
         self.root = root
         self.requester = requester or self._request
+        self.token_store = SecureTokenStore(root) if root else None
         self.specs = {
             "linkedin": {
                 "token_env": "OTH_SOCIAL_LINKEDIN_TOKEN",
@@ -56,14 +61,64 @@ class SocialActionBus:
     def _spec(self, provider):
         return self.specs.get(str(provider).lower())
 
-    def _token(self, spec):
-        return os.getenv(spec["token_env"]) if spec else None
+    def _refresh_youtube(self, stored: dict[str, Any]) -> str | None:
+        refresh_token = stored.get("refresh_token")
+        client_id = os.getenv("OTH_SOCIAL_YOUTUBE_CLIENT_ID")
+        client_secret = os.getenv("OTH_SOCIAL_YOUTUBE_CLIENT_SECRET")
+        if not refresh_token or not client_id:
+            return None
+        form = urllib.parse.urlencode({
+            "client_id": client_id,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+        })
+        if client_secret:
+            form = urllib.parse.urlencode({
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            })
+        request = Request(
+            "https://oauth2.googleapis.com/token",
+            data=form.encode("utf-8"),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            token = payload.get("access_token")
+            if not token or not self.token_store:
+                return None
+            stored["access_token"] = token
+            stored["expires_at"] = time.time() + int(payload.get("expires_in", 3600))
+            self.token_store.set("youtube", stored)
+            return token
+        except Exception:
+            return None
+
+    def _token(self, provider, spec):
+        if not spec:
+            return None
+        if self.token_store:
+            stored = self.token_store.get(provider)
+            if stored:
+                expires_at = float(stored.get("expires_at", 0) or 0)
+                token = stored.get("access_token")
+                if token and (not expires_at or expires_at > time.time() + 30):
+                    return token
+                if provider == "youtube":
+                    refreshed = self._refresh_youtube(stored)
+                    if refreshed:
+                        return refreshed
+        return os.getenv(spec["token_env"])
 
     def _health(self, provider):
         spec = self._spec(provider)
         if not spec:
             return SocialActionResult(False, {}, f"Unsupported social provider: {provider}")
-        token = self._token(spec)
+        token = self._token(provider, spec)
         if not token:
             return SocialActionResult(True, {
                 "provider": provider,
@@ -106,7 +161,7 @@ class SocialActionBus:
         spec = self._spec(provider)
         if not spec or "publish_url" not in spec:
             return SocialActionResult(False, {}, f"Text publishing is not implemented for {provider}")
-        token = self._token(spec)
+        token = self._token(provider, spec)
         if not token:
             return SocialActionResult(True, {
                 "provider": provider,

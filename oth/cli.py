@@ -5,6 +5,7 @@ from pathlib import Path
 from .core.kernel import OTHKernel
 from .core.runner import OTHRunner
 from .core.skills import SkillAcquirer
+from .core.secure_tokens import SecureTokenStore
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -67,6 +68,12 @@ def main(argv=None):
     social_setup.add_argument("--provider")
     social_onboard = social_sub.add_parser("onboard")
     social_onboard.add_argument("--provider")
+    social_oauth_start = social_sub.add_parser("oauth-start")
+    social_oauth_start.add_argument("provider")
+    social_oauth_callback = social_sub.add_parser("oauth-callback")
+    social_oauth_callback.add_argument("provider")
+    social_oauth_callback.add_argument("--state", required=True)
+    social_oauth_callback.add_argument("--code", required=True)
     social_connect = social_sub.add_parser("connect")
     social_connect.add_argument("provider")
     social_connect.add_argument("--account", default="")
@@ -198,7 +205,18 @@ def main(argv=None):
             print("Dependency provisioning is currently plan-only.")
             return
         if args.cmd == "social":
-            if args.social_cmd in {"setup", "onboard"}:
+            if args.social_cmd == "oauth-start":
+                task = kernel.submit("social-accounts", "oauth_start", {
+                    "input": {"provider": args.provider}
+                }, 72)
+            elif args.social_cmd == "oauth-callback":
+                SecureTokenStore(ROOT).set(
+                    f"oauth-code:{args.state}", {"code": args.code}
+                )
+                task = kernel.submit("social-accounts", "oauth_callback", {
+                    "input": {"provider": args.provider, "state": args.state}
+                }, 72)
+            elif args.social_cmd in {"setup", "onboard"}:
                 payload = {"input": {}}
                 if args.provider:
                     payload["input"]["provider"] = args.provider

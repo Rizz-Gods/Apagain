@@ -12,6 +12,8 @@ skills/installed/
 data/schedule-state.json
 data/social_accounts.json
 data/social_learning.json
+data/social_oauth.json
+data/social_tokens.secure
 logs/*.log
 .oth-node-red/
 workflows/social/*.json
