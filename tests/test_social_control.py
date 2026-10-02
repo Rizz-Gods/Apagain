@@ -36,6 +36,17 @@ class SocialControlTests(unittest.TestCase):
                     "status": "converted",
                 }]
             }))
+            (root / "data" / "social_accounts.json").write_text(json.dumps({
+                "accounts": [{
+                    "provider": "linkedin",
+                    "account_label": "linkedin",
+                    "status": "ready",
+                    "credential_present": True,
+                    "identity": {"actor": "urn:li:person:123"},
+                    "capabilities": ["publish_posts", "analytics"],
+                    "last_probe_at": "2026-10-02T00:00:00Z",
+                }]
+            }))
             worker = SocialControl(root)
             result = worker.execute("status", {"input": {}})
             self.assertTrue(result.success)
@@ -44,6 +55,8 @@ class SocialControlTests(unittest.TestCase):
             self.assertEqual(row["funnel"]["conversions"], 1)
             self.assertEqual(result.output["totals"]["conversions"], 1)
             self.assertEqual(result.output["attention"][0]["priority"], "human_review")
+            self.assertEqual(result.output["accounts"][0]["identity"]["actor"], "urn:li:person:123")
+            self.assertEqual(result.output["account_attention"], [])
 
 
 if __name__ == "__main__":

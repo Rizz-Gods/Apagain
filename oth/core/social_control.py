@@ -20,6 +20,7 @@ class SocialControl:
         self.queue = self.root / "data" / "social_queue.json"
         self.leads = self.root / "data" / "social_leads.json"
         self.learning = self.root / "data" / "social_learning.json"
+        self.accounts = self.root / "data" / "social_accounts.json"
 
     def supports(self, capability: str) -> bool:
         return capability == "social-control"
@@ -40,6 +41,16 @@ class SocialControl:
         items = self._read(self.queue, {"items": []}).get("items", [])
         leads = self._read(self.leads, {"leads": []}).get("leads", [])
         learning = self._read(self.learning, {"experiments": [], "insights": []})
+        accounts = self._read(self.accounts, {"accounts": []}).get("accounts", [])
+        account_rows = [{
+            "provider": account.get("provider"),
+            "account_label": account.get("account_label"),
+            "status": account.get("status", "awaiting_credentials"),
+            "credential_present": bool(account.get("credential_present", False)),
+            "identity": account.get("identity", {}),
+            "capabilities": account.get("capabilities", []),
+            "last_probe_at": account.get("last_probe_at"),
+        } for account in accounts]
 
         now = datetime.now(timezone.utc)
         by_campaign = {}
@@ -142,8 +153,18 @@ class SocialControl:
 
         snapshot = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "accounts": account_rows,
             "campaigns": report,
             "attention": attention,
+            "account_attention": [
+                {
+                    "provider": account.get("provider"),
+                    "priority": "credential",
+                    "reason": "account_credentials_missing",
+                }
+                for account in account_rows
+                if not account.get("credential_present")
+            ],
             "totals": {
                 "campaigns": len(report),
                 "content_items": len(items),

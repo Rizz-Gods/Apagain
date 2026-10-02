@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from oth.core.secure_tokens import SecureTokenStore
+from oth.core.social_actions import SocialActionBus
 
 PROVIDERS = {
     "linkedin": {
@@ -65,12 +66,13 @@ class AccountResult:
 class SocialAccountManager:
     id = "social-accounts"
 
-    def __init__(self, root: str | Path):
+    def __init__(self, root: str | Path, requester=None):
         self.root = Path(root)
         self.path = self.root / "data" / "social_accounts.json"
         self.oauth_path = self.root / "data" / "social_oauth.json"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.token_store = SecureTokenStore(self.root)
+        self.actions = SocialActionBus(self.root, requester=requester)
 
     def supports(self, capability: str) -> bool:
         return capability == "social-accounts"
@@ -153,7 +155,73 @@ class SocialAccountManager:
             "security": "OAuth state is persisted; client secrets and authorization codes are not.",
         })
 
-    def _oauth_callback(self, provider: str, state: str) -> AccountResult:
+    @staticmethod
+    def _public_identity(provider: str, identity: dict[str, Any]) -> dict[str, Any]:
+        if provider == "linkedin":
+            sub = identity.get("sub")
+            return {
+                "id": sub,
+                "actor": f"urn:li:person:{sub}" if sub else None,
+                "name": identity.get("name"),
+            }
+        if provider == "youtube":
+            items = identity.get("items", []) if isinstance(identity, dict) else []
+            row = items[0] if items else {}
+            snippet = row.get("snippet", {}) if isinstance(row, dict) else {}
+            return {
+                "id": row.get("id"),
+                "name": snippet.get("title"),
+                "custom_url": snippet.get("customUrl"),
+            }
+        if provider == "x":
+            data = identity.get("data", {}) if isinstance(identity, dict) else {}
+            return {
+                "id": data.get("id"),
+                "name": data.get("name"),
+                "username": data.get("username"),
+            }
+        return {}
+
+    def _probe_and_store(self, provider: str) -> AccountResult:
+        spec = PROVIDERS.get(provider)
+        if not spec:
+            return AccountResult(False, {}, f"Unsupported social provider: {provider}")
+        result = self.actions.execute("health", {"input": {"provider": provider}})
+        if not result.success:
+            return AccountResult(False, {}, result.error or "Account probe failed", retryable=result.retryable)
+        if result.output.get("status") in {"awaiting_credentials", "permission_or_api_error", "credential_present"}:
+            return AccountResult(True, {
+                "provider": provider,
+                "status": result.output.get("status"),
+                "identity": {},
+                "reason": result.output.get("reason"),
+            })
+        identity = self._public_identity(provider, result.output.get("identity", {}))
+        data = self._load()
+        account = next((a for a in data["accounts"] if a.get("provider") == provider), None)
+        if not account:
+            account = {
+                "provider": provider,
+                "account_label": provider,
+                "setup_url": spec["setup_url"],
+                "auth": spec["auth"],
+                "credential_env": spec["env"],
+                "capabilities": spec["capabilities"],
+            }
+            data["accounts"].append(account)
+        account["credential_present"] = True
+        account["status"] = "ready"
+        account["identity"] = identity
+        account["last_probe_at"] = datetime.now(timezone.utc).isoformat()
+        self._save(data)
+        return AccountResult(True, {
+            "provider": provider,
+            "status": "healthy",
+            "identity": identity,
+            "live": True,
+        })
+
+    def _oauth_callback(self, provider: str, state: str):
         spec = PROVIDERS.get(provider)
         if not spec or not spec.get("token_url"):
             return AccountResult(False, {}, f"OAuth callback is not configured for {provider}")
@@ -205,9 +273,11 @@ class SocialAccountManager:
         data["accounts"].append(account)
         self._save(data)
         self.token_store.delete(f"oauth-code:{state}")
+        probe = self._probe_and_store(provider)
         return AccountResult(True, {
             "provider": provider,
             "status": "connected",
+            "identity": probe.output.get("identity", {}) if probe.success else {},
             "credential_source": "windows_dpapi",
             "expires_at": secure_payload["expires_at"],
             "refresh_token_present": bool(secure_payload["refresh_token"]),
@@ -221,6 +291,8 @@ class SocialAccountManager:
             return self._oauth_callback(provider, str(source.get("state", "")))
         if action == "oauth_start":
             return self._oauth_start(provider)
+        if action == "probe":
+            return self._probe_and_store(provider)
         if action in {"setup", "onboard"}:
             providers = [provider] if provider else list(PROVIDERS)
             checklist = []

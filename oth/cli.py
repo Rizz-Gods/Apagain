@@ -79,6 +79,8 @@ def main(argv=None):
     social_oauth_callback.add_argument("provider")
     social_oauth_callback.add_argument("--state", required=True)
     social_oauth_callback.add_argument("--code", required=True)
+    social_probe = social_sub.add_parser("probe")
+    social_probe.add_argument("provider")
     social_connect = social_sub.add_parser("connect")
     social_connect.add_argument("provider")
     social_connect.add_argument("--account", default="")
@@ -320,6 +322,10 @@ def main(argv=None):
                     payload["input"]["provider"] = args.provider
                 action = "onboard" if args.social_cmd == "onboard" else "setup"
                 task = kernel.submit("social-accounts", action, payload, 70)
+            elif args.social_cmd == "probe":
+                task = kernel.submit("social-accounts", "probe", {
+                    "input": {"provider": args.provider}
+                }, 72)
             elif args.social_cmd == "connect":
                 task = kernel.submit("social-accounts", "connect", {
                     "input": {

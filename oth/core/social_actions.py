@@ -187,6 +187,19 @@ class SocialActionBus:
         except Exception:
             return
 
+    def _stored_actor(self, provider: str):
+        if not self.root:
+            return None
+        path = self.root / "data" / "social_accounts.json"
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        account = next((a for a in data.get("accounts", []) if a.get("provider") == provider), None)
+        return ((account or {}).get("identity") or {}).get("actor")
+
     def _publish_text(self, provider, text, actor=None, content_id=None):
         spec = self._spec(provider)
         if not spec or "publish_url" not in spec:
@@ -200,7 +213,7 @@ class SocialActionBus:
                 "action": "publish_text",
             })
         if provider == "linkedin":
-            actor = actor or os.getenv("OTH_SOCIAL_LINKEDIN_ACTOR")
+            actor = actor or os.getenv("OTH_SOCIAL_LINKEDIN_ACTOR") or self._stored_actor("linkedin")
             if not actor:
                 return SocialActionResult(False, {}, "LinkedIn publish requires OTH_SOCIAL_LINKEDIN_ACTOR")
             body = {
