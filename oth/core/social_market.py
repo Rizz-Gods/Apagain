@@ -99,9 +99,11 @@ class SocialMarketWorker:
                 name: self.platforms[name] for name in platforms
             },
             "human_approval": [
+                "external",
+                "financial",
+                "irreversible",
                 "paid_campaign_launch",
                 "public_claim_with_material_business_impact",
-                "external_irreversible_action",
             ],
         }
         path.write_text(json.dumps(document, indent=2), encoding="utf-8")
