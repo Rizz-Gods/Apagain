@@ -19,6 +19,8 @@ from oth.workers.builtin import BuiltinWorker
 from oth.workers.external import ExternalAgentWorker
 from oth.core.scout import ScoutWorker
 from oth.core.social_market import SocialMarketWorker
+from oth.core.social_accounts import SocialAccountManager
+from oth.core.social_optimizer import SocialOptimizer
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -67,6 +69,12 @@ class OTHKernel:
             elif mode == "social-market":
                 self.workers.append(SocialMarketWorker(self.root))
                 modes.add("social-market")
+            elif mode == "social-accounts":
+                self.workers.append(SocialAccountManager(self.root))
+                modes.add("social-accounts")
+            elif mode == "social-optimization":
+                self.workers.append(SocialOptimizer(self.root))
+                modes.add("social-optimization")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
@@ -89,6 +97,10 @@ class OTHKernel:
             self.workers.append(WorkflowCompiler(self.root))
         if "social-market" not in modes:
             self.workers.append(SocialMarketWorker(self.root))
+        if "social-accounts" not in modes:
+            self.workers.append(SocialAccountManager(self.root))
+        if "social-optimization" not in modes:
+            self.workers.append(SocialOptimizer(self.root))
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
         task = Task(str(uuid.uuid4()), capability, action, payload, priority)

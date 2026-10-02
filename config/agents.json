@@ -46,6 +46,26 @@
       }
     },
     {
+      "id": "social-accounts",
+      "name": "Social Account Manager",
+      "capabilities": ["social-accounts"],
+      "status": "available",
+      "metadata": {
+        "mode": "social-accounts",
+        "priority": 72
+      }
+    },
+    {
+      "id": "social-optimizer",
+      "name": "Social Optimizer",
+      "capabilities": ["social-optimization"],
+      "status": "available",
+      "metadata": {
+        "mode": "social-optimization",
+        "priority": 70
+      }
+    },
+    {
       "id": "opportunity-analyst",
       "name": "Opportunity Analyst",
       "capabilities": ["opportunity-analysis"],

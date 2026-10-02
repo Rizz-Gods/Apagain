@@ -10,6 +10,8 @@ data/skills-index.json
 skills/candidates/
 skills/installed/
 data/schedule-state.json
+data/social_accounts.json
+data/social_learning.json
 logs/*.log
 .oth-node-red/
 workflows/social/*.json

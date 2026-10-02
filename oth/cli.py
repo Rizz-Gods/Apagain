@@ -61,6 +61,27 @@ def main(argv=None):
     provisions = sub.add_parser("provisioning")
     provisions.add_argument("--limit", type=int, default=20)
 
+    social = sub.add_parser("social")
+    social_sub = social.add_subparsers(dest="social_cmd", required=True)
+    social_setup = social_sub.add_parser("setup")
+    social_setup.add_argument("--provider")
+    social_connect = social_sub.add_parser("connect")
+    social_connect.add_argument("provider")
+    social_connect.add_argument("--account", default="")
+    social_sub.add_parser("status")
+    social_opt = social_sub.add_parser("optimize")
+    social_opt.add_argument("--platform")
+    social_record = social_sub.add_parser("record")
+    social_record.add_argument("platform")
+    social_record.add_argument("content_id")
+    social_record.add_argument("--hook", default="")
+    social_record.add_argument("--format", default="")
+    social_record.add_argument("--pillar", default="")
+    social_record.add_argument("--impressions", type=float, default=0)
+    social_record.add_argument("--engagements", type=float, default=0)
+    social_record.add_argument("--qualified-leads", type=float, default=0)
+    social_record.add_argument("--conversions", type=float, default=0)
+
     memory = sub.add_parser("memory")
     memory_sub = memory.add_subparsers(dest="memory_cmd", required=True)
     memory_list = memory_sub.add_parser("list")
@@ -168,6 +189,43 @@ def main(argv=None):
             return
         if args.cmd == "provisioning":
             print("Dependency provisioning is currently plan-only.")
+            return
+        if args.cmd == "social":
+            if args.social_cmd == "setup":
+                payload = {"input": {}}
+                if args.provider:
+                    payload["input"]["provider"] = args.provider
+                task = kernel.submit("social-accounts", "setup", payload, 70)
+            elif args.social_cmd == "connect":
+                task = kernel.submit("social-accounts", "connect", {
+                    "input": {
+                        "provider": args.provider,
+                        "account_label": args.account,
+                    }
+                }, 70)
+            elif args.social_cmd == "status":
+                task = kernel.submit("social-accounts", "status", {"input": {}}, 70)
+            elif args.social_cmd == "optimize":
+                task = kernel.submit("social-optimization", "optimize", {
+                    "input": {"platform": args.platform}
+                }, 65)
+            else:
+                task = kernel.submit("social-optimization", "record", {
+                    "input": {
+                        "platform": args.platform,
+                        "content_id": args.content_id,
+                        "hook": args.hook,
+                        "format": args.format,
+                        "pillar": args.pillar,
+                        "metrics": {
+                            "impressions": args.impressions,
+                            "engagements": args.engagements,
+                            "qualified_leads": args.qualified_leads,
+                            "conversions": args.conversions,
+                        },
+                    }
+                }, 65)
+            print(json.dumps(kernel.dispatch(task.id), indent=2))
             return
         if args.cmd == "blueprints":
             for row in kernel.db.list_blueprints(args.limit):
