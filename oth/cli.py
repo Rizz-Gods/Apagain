@@ -1,5 +1,7 @@
 import argparse
+import contextlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -7,6 +9,38 @@ from .core.kernel import OTHKernel
 from .core.runner import OTHRunner
 from .core.skills import SkillAcquirer
 from .core.secure_tokens import SecureTokenStore
+
+@contextlib.contextmanager
+def daemon_singleton(root: Path):
+    pid_path = root / "data" / "oth-daemon.pid"
+    pid_path.parent.mkdir(parents=True, exist_ok=True)
+    pid = os.getpid()
+    acquired = False
+    while not acquired:
+        try:
+            with pid_path.open("x", encoding="utf-8") as handle:
+                handle.write(str(pid))
+            acquired = True
+        except FileExistsError:
+            try:
+                existing_pid = int(pid_path.read_text(encoding="utf-8").strip())
+                os.kill(existing_pid, 0)
+            except (ValueError, ProcessLookupError, PermissionError, OSError):
+                try:
+                    pid_path.unlink()
+                except FileNotFoundError:
+                    pass
+            else:
+                yield False
+                return
+    try:
+        yield True
+    finally:
+        try:
+            if pid_path.read_text(encoding="utf-8").strip() == str(pid):
+                pid_path.unlink()
+        except (FileNotFoundError, OSError):
+            pass
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -313,12 +347,16 @@ def main(argv=None):
     kernel = OTHKernel(ROOT)
     try:
         if args.cmd == "daemon":
-            runner = OTHRunner(kernel, args.interval)
-            if args.once:
-                print(runner.run_once())
-            else:
-                print("OTH daemon online")
-                runner.run_forever()
+            with daemon_singleton(ROOT) as acquired:
+                if not acquired:
+                    print("OTH daemon already running")
+                    return
+                runner = OTHRunner(kernel, args.interval)
+                if args.once:
+                    print(runner.run_once())
+                else:
+                    print("OTH daemon online")
+                    runner.run_forever()
             return
         if args.cmd == "tools":
             for tool in kernel.tools.discover():

@@ -4,5 +4,5 @@ set "FFMPEG_BIN=C:\Users\Admin\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmp
 set "GIT_LFS_BIN=C:\Users\Admin\bin\git-lfs\git-lfs-3.8.0"
 set "PATH=%FFMPEG_BIN%;%GIT_LFS_BIN%;%PATH%"
 echo [%date% %time%] OTH daemon starting>> "logs\daemon.log"
-".venv\Scripts\python.exe" -m oth.cli daemon --interval 5 >> "logs\daemon.log" 2>&1
+".venv\Scripts\python.exe" -m oth.cli daemon --interval 10 >> "logs\daemon.log" 2>&1
 echo [%date% %time%] OTH daemon exited>> "logs\daemon.log"

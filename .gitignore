@@ -23,6 +23,7 @@ data/resolve_state.json
 data/browser_profiles/
 data/social_oauth.json
 data/social_tokens.secure
+data/oth-daemon.lock
 logs/*.log
 .oth-node-red/
 workflows/social/*.json
@@ -33,3 +34,4 @@ data/media/ingest/transcription_smoke.wav
 data/media/captions/transcription_smoke.json
 data/media/captions/transcription_smoke.srt
 tools/smoke_transcribe.py
+data/oth-daemon.pid
