@@ -1,0 +1,61 @@
+{
+  "triggers": [
+    {
+      "id": "approval-attention",
+      "enabled": true,
+      "event": {
+        "kind": "task.approval_required",
+        "capability": "social-actions"
+      },
+      "tasks": [
+        {
+          "capability": "social-control",
+          "action": "attention",
+          "priority": 80,
+          "payload": {
+            "input_from": "event.task",
+            "risk": "safe"
+          }
+        }
+      ]
+    },
+    {
+      "id": "social-failure-attention",
+      "enabled": true,
+      "event": {
+        "kind": "task.failed",
+        "capability": "social-actions"
+      },
+      "tasks": [
+        {
+          "capability": "social-control",
+          "action": "attention",
+          "priority": 78,
+          "payload": {
+            "input_from": "event.task",
+            "risk": "safe"
+          }
+        }
+      ]
+    },
+    {
+      "id": "media-failure-attention",
+      "enabled": true,
+      "event": {
+        "kind": "task.failed",
+        "capability": "media-production"
+      },
+      "tasks": [
+        {
+          "capability": "social-control",
+          "action": "attention",
+          "priority": 70,
+          "payload": {
+            "input_from": "event.task",
+            "risk": "safe"
+          }
+        }
+      ]
+    }
+  ]
+}

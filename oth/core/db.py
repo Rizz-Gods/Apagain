@@ -26,6 +26,21 @@ CREATE TABLE IF NOT EXISTS agent_stats (
   failures INTEGER NOT NULL DEFAULT 0, last_error TEXT,
   last_run TEXT
 );
+CREATE TABLE IF NOT EXISTS trigger_fires (
+  fire_key TEXT PRIMARY KEY, fired_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS evaluations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id TEXT NOT NULL,
+  capability TEXT NOT NULL,
+  worker_id TEXT NOT NULL,
+  quality REAL NOT NULL,
+  success INTEGER NOT NULL,
+  lane INTEGER NOT NULL,
+  observations TEXT NOT NULL,
+  lesson TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS opportunities (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,6 +124,20 @@ class Database:
         self.conn.execute(
             "INSERT INTO memories(kind,key,content,created_at) VALUES(?,?,?,?)",
             (kind, key, json.dumps(content), created_at),
+        )
+        self.conn.commit()
+
+    def trigger_fired(self, fire_key: str) -> bool:
+        row = self.conn.execute(
+            "SELECT 1 FROM trigger_fires WHERE fire_key=?",
+            (fire_key,),
+        ).fetchone()
+        return row is not None
+
+    def mark_trigger_fired(self, fire_key: str, fired_at: str) -> None:
+        self.conn.execute(
+            "INSERT OR IGNORE INTO trigger_fires(fire_key,fired_at) VALUES(?,?)",
+            (fire_key, fired_at),
         )
         self.conn.commit()
 
@@ -234,6 +263,55 @@ class Database:
             "SELECT * FROM promotion_results ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
 
+    def record_evaluation(
+        self,
+        task_id: str,
+        capability: str,
+        worker_id: str,
+        quality: float,
+        success: bool,
+        lane: int,
+        observations: dict[str, Any],
+        lesson: str,
+        created_at: str,
+    ) -> None:
+        self.conn.execute(
+            "INSERT INTO evaluations(task_id,capability,worker_id,quality,success,lane,observations,lesson,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (
+                task_id,
+                capability,
+                worker_id,
+                float(quality),
+                int(success),
+                int(lane),
+                json.dumps(observations),
+                lesson,
+                created_at,
+            ),
+        )
+        self.conn.commit()
+
+    def recent_evaluations(self, worker_id: str | None = None, limit: int = 20):
+        if worker_id:
+            return self.conn.execute(
+                "SELECT * FROM evaluations WHERE worker_id=? ORDER BY id DESC LIMIT ?",
+                (worker_id, limit),
+            ).fetchall()
+        return self.conn.execute(
+            "SELECT * FROM evaluations ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+    def agent_quality(self, agent_id: str) -> float:
+        row = self.conn.execute(
+            "SELECT AVG(quality) AS quality FROM evaluations WHERE worker_id=?",
+            (agent_id,),
+        ).fetchone()
+        if not row or row["quality"] is None:
+            return 1.0
+        return float(row["quality"])
+
     def record_agent_result(self, agent_id: str, success: bool,
                             error: str | None, created_at: str):
         row = self.conn.execute(
@@ -259,13 +337,19 @@ class Database:
             "SELECT * FROM agent_stats WHERE agent_id=?", (agent_id,)
         ).fetchone()
         if not row:
-            return {"successes": 0, "failures": 0, "reliability": 1.0}
+            return {
+                "successes": 0,
+                "failures": 0,
+                "reliability": 1.0,
+                "quality": self.agent_quality(agent_id),
+            }
         total = row["successes"] + row["failures"]
         reliability = row["successes"] / total if total else 1.0
         return {
             "successes": row["successes"],
             "failures": row["failures"],
             "reliability": reliability,
+            "quality": self.agent_quality(agent_id),
             "last_error": row["last_error"],
             "last_run": row["last_run"],
         }

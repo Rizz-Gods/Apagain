@@ -4,6 +4,10 @@ from .db import Database
 from .models import Task, now_iso
 from .policy import PolicyGate
 from .registry import Registry
+from .workforce import WorkforceRegistry
+from .triggers import EventTriggerEngine
+from .lanes import LaneRouter
+from .evaluator import ExecutionEvaluator
 from .analyst import OpportunityAnalyst
 from .automation_builder import AutomationBuilder
 from .automation_designer import AutomationDesigner
@@ -15,7 +19,7 @@ from .review_miner import ReviewMiner
 from .skills import SkillAcquirer
 from .tools import ToolRegistry
 from oth.workers.browser import BrowserWorker
-from oth.workers.builtin import BuiltinWorker
+from oth.workers.builtin import BuiltinWorker, WorkerResult
 from oth.workers.external import ExternalAgentWorker
 from oth.core.scout import ScoutWorker
 from oth.core.social_market import SocialMarketWorker
@@ -46,6 +50,10 @@ class OTHKernel:
             self.root / "config" / "agents.json",
             self.root / "config" / "skills.json",
         )
+        self.workforce = WorkforceRegistry(self.root)
+        self.trigger_engine = EventTriggerEngine(self.root)
+        self.lanes = LaneRouter(self.root)
+        self.evaluator = ExecutionEvaluator()
         self.skill_acquirer = SkillAcquirer(self.root)
         self.policy = PolicyGate(self.root / "config" / "policies.json")
         self.tools = ToolRegistry(self.root / "config" / "tools.json")
@@ -220,54 +228,212 @@ class OTHKernel:
             task_payload["memory_context"] = "\n".join(
                 f'{m["created_at"]}: {m["content"]}' for m in memories
             )
+        capability_contract = self.workforce.capability_for(row["capability"])
+        risk_order = {"safe": 0, "local_write": 1, "external": 2, "financial": 3}
+        current_risk = str(task_payload.get("risk", "safe")).lower()
+        if risk_order.get(capability_contract.risk, 0) > risk_order.get(current_risk, 0):
+            task_payload["risk"] = capability_contract.risk
         if row["capability"] == "social-actions" and row["action"] in {"publish_text", "publish_video"}:
             task_payload["risk"] = "external"
         decision = self.policy.check(task_payload)
         if not decision.allowed:
             self.db.update_task(task_id, "blocked", now_iso())
             self.db.add_event(task_id, "task.approval_required", {"reason": decision.reason}, now_iso())
-            return {"status": "blocked", "reason": decision.reason}
-        self.db.update_task(task_id, "running", now_iso())
-        self.db.add_event(task_id, "task.started", {}, now_iso())
-        candidates = [w for w in self.workers if w.supports(row["capability"])]
-        candidates.sort(
-            key=lambda w: (
-                float(getattr(w, "agent", None).metadata.get("priority", 50))
-                if getattr(w, "agent", None) else 50
+            self.db.add_event(
+                task_id,
+                "task.escalation_required",
+                {"target": "pilot", "reason": decision.reason},
+                now_iso(),
             )
-            + self.db.agent_health(getattr(w, "id", "builtin"))["reliability"] * 10,
-            reverse=True,
-        )
-        worker = candidates[0] if candidates else None
-        if worker is None:
-            self.db.update_task(task_id, "blocked", now_iso())
-            self.db.add_event(task_id, "task.blocked", {"reason": "no_worker"}, now_iso())
-            return {"status": "blocked", "reason": "no_worker"}
+            return {"status": "blocked", "reason": decision.reason}
 
-        import json
-        result = worker.execute(row["action"], task_payload)
+        worker_map = {
+            getattr(worker, "id", "builtin"): worker
+            for worker in self.workers
+        }
+        excluded_workers = set(stored_payload.get("_failed_lane_workers", []))
+        lane_candidates = self.lanes.candidates(
+            self,
+            row["capability"],
+            row["action"],
+            excluded_workers=excluded_workers,
+        )
+        executable_lanes = [
+            candidate for candidate in lane_candidates
+            if candidate.worker_id in worker_map
+        ]
+
+        if not executable_lanes:
+            self.db.update_task(task_id, "blocked", now_iso())
+            reason = "no_worker" if not lane_candidates else "worker_runtime_unavailable"
+            self.db.add_event(task_id, "task.blocked", {"reason": reason}, now_iso())
+            self.db.add_event(
+                task_id,
+                "task.escalation_required",
+                {"target": "pilot", "reason": reason},
+                now_iso(),
+            )
+            return {"status": "blocked", "reason": reason}
+
+        self.db.update_task(task_id, "running", now_iso())
+        self.db.add_event(
+            task_id,
+            "task.started",
+            {"lanes": [
+                {
+                    "lane": candidate.lane,
+                    "capability": candidate.capability,
+                    "action": candidate.action,
+                    "worker_id": candidate.worker_id,
+                }
+                for candidate in executable_lanes
+            ]},
+            now_iso(),
+        )
+
+        lane_history = []
+        result = None
+        selected_candidate = None
+        for index, candidate in enumerate(executable_lanes):
+            if index > 0:
+                self.db.add_event(
+                    task_id,
+                    "lane.switched",
+                    {
+                        "from_lane": executable_lanes[index - 1].lane,
+                        "to_lane": candidate.lane,
+                        "reason": lane_history[-1].get("error", "previous lane failed"),
+                    },
+                    now_iso(),
+                )
+
+            worker = worker_map[candidate.worker_id]
+            lane_payload = dict(task_payload)
+            lane_payload["execution_lane"] = candidate.lane
+            if candidate.capability != row["capability"] or candidate.action != row["action"]:
+                lane_payload["lane_fallback_from"] = {
+                    "capability": row["capability"],
+                    "action": row["action"],
+                }
+
+            self.db.add_event(
+                task_id,
+                f"lane.{candidate.lane}.started",
+                {
+                    "capability": candidate.capability,
+                    "action": candidate.action,
+                    "worker_id": candidate.worker_id,
+                },
+                now_iso(),
+            )
+            lane_result = worker.execute(candidate.action, lane_payload)
+            lane_history.append({
+                "lane": candidate.lane,
+                "worker_id": candidate.worker_id,
+                "capability": candidate.capability,
+                "action": candidate.action,
+                "success": lane_result.success,
+                "error": lane_result.error,
+                "retryable": lane_result.retryable,
+            })
+            self.db.record_agent_result(
+                candidate.worker_id,
+                lane_result.success,
+                lane_result.error,
+                now_iso(),
+            )
+
+            if lane_result.success:
+                self.lanes.record_success(self, task_id, candidate)
+                result = lane_result
+                selected_candidate = candidate
+                break
+
+            self.lanes.record_failure(self, task_id, candidate, lane_result.error)
+            stored_payload.setdefault("_failed_lane_workers", [])
+            if candidate.worker_id not in stored_payload["_failed_lane_workers"]:
+                stored_payload["_failed_lane_workers"].append(candidate.worker_id)
+
+        if result is None:
+            result = WorkerResult(
+                False,
+                {},
+                "all execution lanes failed",
+                retryable=any(item["retryable"] for item in lane_history),
+            )
+
         status = "succeeded" if result.success else "failed"
+        selected_worker_id = (
+            selected_candidate.worker_id
+            if selected_candidate
+            else lane_history[-1]["worker_id"]
+        )
+        contract = self.workforce.contract_for(selected_worker_id)
+        evaluation = self.evaluator.evaluate(
+            success=result.success,
+            result_output=result.output,
+            error=result.error,
+            lane_history=lane_history,
+        )
+        self.db.record_evaluation(
+            task_id,
+            row["capability"],
+            evaluation.worker_id,
+            evaluation.quality,
+            evaluation.success,
+            evaluation.lane,
+            evaluation.observations,
+            evaluation.lesson,
+            now_iso(),
+        )
+        self.db.add_event(
+            task_id,
+            "task.evaluated",
+            {
+                "quality": evaluation.quality,
+                "worker_id": evaluation.worker_id,
+                "lane": evaluation.lane,
+                "lesson": evaluation.lesson,
+                "observations": evaluation.observations,
+            },
+            now_iso(),
+        )
+        configured_retries = int(
+            stored_payload.get("max_retries", contract.retry.max_attempts)
+        )
         retry_scheduled = False
-        if (not result.success and result.retryable
-                and int(stored_payload.get("_attempts", 0))
-                < int(stored_payload.get("max_retries", 0))):
+
+        # A lane failure is a reason to continue into the next recovery cycle,
+        # even when an individual worker reported the error as non-retryable.
+        if (
+            not result.success
+            and int(stored_payload.get("_attempts", 0)) < configured_retries
+        ):
             stored_payload["_attempts"] = int(stored_payload.get("_attempts", 0)) + 1
             self.db.update_task_payload(task_id, stored_payload, now_iso())
             self.db.update_task(task_id, "queued", now_iso())
             self.db.add_event(
-                task_id, "task.retry_scheduled",
-                {"attempt": stored_payload["_attempts"]}, now_iso(),
+                task_id,
+                "task.retry_scheduled",
+                {
+                    "attempt": stored_payload["_attempts"],
+                    "reason": "lane_exhausted",
+                    "failed_workers": stored_payload.get("_failed_lane_workers", []),
+                },
+                now_iso(),
             )
             retry_scheduled = True
+
         if not retry_scheduled:
             self.db.update_task(task_id, status, now_iso())
-        worker_id = getattr(worker, "id", "builtin")
-        self.db.record_agent_result(
-            worker_id,
-            result.success,
-            result.error,
-            now_iso(),
-        )
+
+        lane_output = dict(result.output or {})
+        lane_output["execution_lanes"] = lane_history
+        lane_output["evaluation"] = {
+            "quality": evaluation.quality,
+            "lesson": evaluation.lesson,
+            "observations": evaluation.observations,
+        }
         if result.success and row["capability"] in ("scout", "review-mining"):
             self.db.add_opportunities(result.output.get("signals", []))
         if result.success and row["capability"] == "opportunity-analysis":
@@ -346,21 +512,38 @@ class OTHKernel:
                 "action": row["action"],
                 "status": effective_status,
                 "error": result.error,
-                "output": result.output,
+                "output": lane_output,
                 "retryable": result.retryable,
             },
             now_iso(),
         )
-        self.db.add_event(task_id, f"task.{effective_status}",
-                          {"output": result.output, "error": result.error,
-                           "retryable": result.retryable},
-                          now_iso())
+        self.db.add_event(
+            task_id,
+            f"task.{effective_status}",
+            {
+                "output": lane_output,
+                "error": result.error,
+                "retryable": result.retryable,
+                "execution_lanes": lane_history,
+            },
+            now_iso(),
+        )
         spawned = []
         if result.success:
             handoffs = task_payload.get("next") or result.output.get("next") or []
             for spec in handoffs:
                 child_payload = dict(spec.get("payload", {}))
-                if "input" not in child_payload:
+                handoff_source = child_payload.pop("input_from", None)
+                if handoff_source == "event.output":
+                    child_payload["input"] = result.output
+                elif handoff_source == "event.task":
+                    child_payload["input"] = {
+                        "task_id": task_id,
+                        "capability": row["capability"],
+                        "action": row["action"],
+                        "status": effective_status,
+                    }
+                elif "input" not in child_payload:
                     child_payload["input"] = result.output
                 child = self.submit(
                     spec["capability"],
@@ -374,7 +557,16 @@ class OTHKernel:
                     {"child_task_id": child.id, "capability": child.capability},
                     now_iso(),
                 )
-        return {"status": effective_status, **result.output,
+        trigger_task = {
+            "id": task_id,
+            "capability": row["capability"],
+            "action": row["action"],
+            "status": effective_status,
+        }
+        spawned.extend(
+            self.trigger_engine.fire(self, f"task.{effective_status}", trigger_task, result.output)
+        )
+        return {"status": effective_status, **lane_output,
                 "error": result.error, "spawned": spawned,
                 "retryable": result.retryable}
 

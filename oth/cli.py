@@ -9,6 +9,7 @@ from .core.kernel import OTHKernel
 from .core.runner import OTHRunner
 from .core.skills import SkillAcquirer
 from .core.secure_tokens import SecureTokenStore
+from .core.pilot import PilotPlanner
 
 @contextlib.contextmanager
 def daemon_singleton(root: Path):
@@ -84,6 +85,7 @@ def main(argv=None):
 
     sub.add_parser("tools")
     sub.add_parser("agents")
+    sub.add_parser("workforce")
     opp = sub.add_parser("opportunities")
     opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
     opp_list = opp_sub.add_parser("list")
@@ -372,6 +374,9 @@ def main(argv=None):
                     "health": kernel.db.agent_health(agent.id),
                 })
             return
+        if args.cmd == "workforce":
+            print(json.dumps(kernel.workforce.status(kernel.db), indent=2))
+            return
         if args.cmd == "opportunities":
             rows = (kernel.db.top_opportunities(args.limit)
                     if args.opp_cmd == "top"
@@ -619,10 +624,16 @@ def main(argv=None):
             print(json.dumps(kernel.dispatch(task.id), indent=2))
             return
         if args.cmd == "pilot":
-            task = kernel.submit("social-autonomy", "command", {
-                "input": {"instruction": " ".join(args.instruction)}
-            }, 90)
-            print(json.dumps(kernel.dispatch(task.id), indent=2))
+            planner = PilotPlanner()
+            result = planner.submit(kernel, " ".join(args.instruction))
+            runner = OTHRunner(kernel, interval=0.05)
+            executions = []
+            for _ in range(min(4, max(1, result["task_count"]))):
+                step = runner.run_once()
+                if step is None:
+                    break
+                executions.append(step)
+            print(json.dumps({**result, "executions": executions}, indent=2))
             return
         if args.cmd == "production":
             if args.production_cmd == "list":

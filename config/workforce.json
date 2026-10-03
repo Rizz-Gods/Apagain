@@ -1,0 +1,86 @@
+{
+  "defaults": {
+    "department": "ops",
+    "objective": "Execute assigned OTH work safely and return structured results.",
+    "permissions": ["read", "local_execute"],
+    "memory_scope": "task",
+    "retry": {
+      "max_attempts": 1,
+      "retryable": true
+    },
+    "escalation": {
+      "on": ["approval_required", "repeated_failure", "no_worker"],
+      "target": "pilot"
+    },
+    "metrics": ["success_rate", "reliability", "latency"]
+  },
+  "capabilities": {
+    "reasoning": {
+      "department": "research",
+      "risk": "safe",
+      "required_permissions": ["read"]
+    },
+    "research": {
+      "department": "research",
+      "risk": "safe",
+      "required_permissions": ["read"]
+    },
+    "scout": {
+      "department": "research",
+      "risk": "safe",
+      "required_permissions": ["browser_read"]
+    },
+    "review-mining": {
+      "department": "research",
+      "risk": "safe",
+      "required_permissions": ["browser_read"]
+    },
+    "social-autonomy": {
+      "department": "ops",
+      "risk": "safe",
+      "required_permissions": ["orchestrate"]
+    },
+    "social-actions": {
+      "department": "distribution",
+      "risk": "external",
+      "required_permissions": ["external_action"]
+    },
+    "media-production": {
+      "department": "media",
+      "risk": "local_write",
+      "required_permissions": ["local_execute"]
+    },
+    "resolve-bridge": {
+      "department": "media",
+      "risk": "local_write",
+      "required_permissions": ["local_execute"]
+    },
+    "media-transcription": {
+      "department": "media",
+      "risk": "local_write",
+      "required_permissions": ["local_execute"]
+    }
+  },
+  "workers": {
+    "hermes": {
+      "department": "research",
+      "permissions": ["read", "research"]
+    },
+    "scout": {
+      "department": "research",
+      "permissions": ["read", "browser_read", "research"]
+    },
+    "review-miner": {
+      "department": "research",
+      "permissions": ["read", "browser_read", "research"]
+    },
+    "social-autonomy": {
+      "department": "ops",
+      "permissions": ["read", "local_execute", "orchestrate"]
+    },
+    "social-actions": {
+      "department": "distribution",
+      "permissions": ["read", "local_execute", "external_action"]
+    }
+  }
+}
