@@ -9,6 +9,18 @@
         "command": "hermes",
         "oneshot_flag": "-z"
       }
+    },
+    {
+      "id": "scout-http",
+      "name": "HTTP Market Scout",
+      "capabilities": ["scout"],
+      "status": "available",
+      "metadata": {
+        "mode": "scout-http",
+        "command": "curl.exe",
+        "timeout": 30,
+        "priority": 52
+      }
     }
     ,
     {

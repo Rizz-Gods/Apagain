@@ -74,6 +74,11 @@
       "department": "research",
       "permissions": ["read", "browser_read", "research"]
     },
+    "scout-http": {
+      "department": "research",
+      "permissions": ["read", "browser_read", "research"],
+      "objective": "Provide a browser-independent market evidence lane over direct HTTPS."
+    },
     "social-autonomy": {
       "department": "ops",
       "permissions": ["read", "local_execute", "orchestrate"]

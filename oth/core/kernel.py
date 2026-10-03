@@ -22,6 +22,7 @@ from oth.workers.browser import BrowserWorker
 from oth.workers.builtin import BuiltinWorker, WorkerResult
 from oth.workers.external import ExternalAgentWorker
 from oth.core.scout import ScoutWorker
+from oth.core.web_scout import WebScoutHTTPWorker
 from oth.core.social_market import SocialMarketWorker
 from oth.core.social_accounts import SocialAccountManager
 from oth.core.social_content import SocialContentEngine
@@ -66,6 +67,9 @@ class OTHKernel:
             elif mode == "scout":
                 self.workers.append(ScoutWorker(agent))
                 modes.add("scout")
+            elif mode == "scout-http":
+                self.workers.append(WebScoutHTTPWorker(agent))
+                modes.add("scout-http")
             elif mode == "analysis":
                 self.workers.append(OpportunityAnalyst())
                 modes.add("analysis")
