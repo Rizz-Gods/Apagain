@@ -26,7 +26,7 @@ def model_config():
             proc = subprocess.run(
                 [
                     "wsl.exe", "-d", "Arch", "--", "bash", "-lc",
-                    "ip -4 -o addr show eth0 | awk '{print $4}' | cut -d/ -f1",
+                    "ip -4 -o addr show eth0 | sed -n 's/.*inet \\([0-9.]*\\)\\/.*/\\1/p'",
                 ],
                 capture_output=True,
                 text=True,
