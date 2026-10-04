@@ -3,7 +3,10 @@
     {
       "id": "hermes",
       "name": "Hermes Agent",
-      "capabilities": ["reasoning", "research"],
+      "capabilities": [
+        "reasoning",
+        "research"
+      ],
       "status": "available",
       "metadata": {
         "command": "hermes",
@@ -13,7 +16,9 @@
     {
       "id": "reasoning-local",
       "name": "Local Reasoning Fallback",
-      "capabilities": ["reasoning"],
+      "capabilities": [
+        "reasoning"
+      ],
       "status": "available",
       "metadata": {
         "mode": "local-reasoning",
@@ -23,7 +28,9 @@
     {
       "id": "review-miner-fallback",
       "name": "Review Miner Fallback",
-      "capabilities": ["review-mining"],
+      "capabilities": [
+        "review-mining"
+      ],
       "status": "available",
       "metadata": {
         "mode": "review-mining-fallback",
@@ -33,7 +40,9 @@
     {
       "id": "automation-designer-fallback",
       "name": "Automation Designer Fallback",
-      "capabilities": ["automation-design"],
+      "capabilities": [
+        "automation-design"
+      ],
       "status": "available",
       "metadata": {
         "mode": "automation-design-fallback",
@@ -43,7 +52,9 @@
     {
       "id": "opportunity-analyst-fallback",
       "name": "Opportunity Analyst Fallback",
-      "capabilities": ["opportunity-analysis"],
+      "capabilities": [
+        "opportunity-analysis"
+      ],
       "status": "available",
       "metadata": {
         "mode": "analysis-fallback",
@@ -53,7 +64,10 @@
     {
       "id": "scout-http",
       "name": "HTTP Market Scout",
-      "capabilities": ["scout", "research"],
+      "capabilities": [
+        "scout",
+        "research"
+      ],
       "status": "available",
       "metadata": {
         "mode": "scout-http",
@@ -61,12 +75,13 @@
         "timeout": 30,
         "priority": 52
       }
-    }
-    ,
+    },
     {
       "id": "browser",
       "name": "Agent Browser",
-      "capabilities": ["browser"],
+      "capabilities": [
+        "browser"
+      ],
       "status": "available",
       "metadata": {
         "command": "agent-browser.cmd",
@@ -80,7 +95,9 @@
     {
       "id": "scout",
       "name": "Market Scout",
-      "capabilities": ["scout"],
+      "capabilities": [
+        "scout"
+      ],
       "status": "available",
       "metadata": {
         "mode": "scout",
@@ -94,7 +111,9 @@
     {
       "id": "social-market",
       "name": "Social Market Engine",
-      "capabilities": ["social-market"],
+      "capabilities": [
+        "social-market"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-market",
@@ -104,7 +123,9 @@
     {
       "id": "social-accounts",
       "name": "Social Account Manager",
-      "capabilities": ["social-accounts"],
+      "capabilities": [
+        "social-accounts"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-accounts",
@@ -114,7 +135,9 @@
     {
       "id": "social-optimizer",
       "name": "Social Optimizer",
-      "capabilities": ["social-optimization"],
+      "capabilities": [
+        "social-optimization"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-optimization",
@@ -124,7 +147,9 @@
     {
       "id": "social-control",
       "name": "Social Control",
-      "capabilities": ["social-control"],
+      "capabilities": [
+        "social-control"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-control",
@@ -134,7 +159,9 @@
     {
       "id": "social-queue",
       "name": "Social Queue Manager",
-      "capabilities": ["social-queue"],
+      "capabilities": [
+        "social-queue"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-queue",
@@ -144,7 +171,9 @@
     {
       "id": "social-autopilot",
       "name": "Social Autopilot",
-      "capabilities": ["social-autopilot"],
+      "capabilities": [
+        "social-autopilot"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-autopilot",
@@ -154,7 +183,9 @@
     {
       "id": "social-leads",
       "name": "Social Lead Engine",
-      "capabilities": ["social-leads"],
+      "capabilities": [
+        "social-leads"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-leads",
@@ -164,7 +195,9 @@
     {
       "id": "social-content",
       "name": "Social Content Engine",
-      "capabilities": ["social-content"],
+      "capabilities": [
+        "social-content"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-content",
@@ -174,7 +207,9 @@
     {
       "id": "social-planner",
       "name": "Social Planner",
-      "capabilities": ["social-planner"],
+      "capabilities": [
+        "social-planner"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-planner",
@@ -184,7 +219,9 @@
     {
       "id": "media-assets",
       "name": "Media Asset Manager",
-      "capabilities": ["media-assets"],
+      "capabilities": [
+        "media-assets"
+      ],
       "status": "available",
       "metadata": {
         "mode": "media-assets",
@@ -194,7 +231,9 @@
     {
       "id": "social-editor",
       "name": "Social Editorial Director",
-      "capabilities": ["social-editor"],
+      "capabilities": [
+        "social-editor"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-editor",
@@ -205,7 +244,9 @@
     {
       "id": "media-producer",
       "name": "Media Production Director",
-      "capabilities": ["media-production"],
+      "capabilities": [
+        "media-production"
+      ],
       "status": "available",
       "metadata": {
         "mode": "media-production",
@@ -216,7 +257,9 @@
     {
       "id": "media-ingest",
       "name": "Media Source Ingest",
-      "capabilities": ["media-ingest"],
+      "capabilities": [
+        "media-ingest"
+      ],
       "status": "available",
       "metadata": {
         "mode": "media-ingest",
@@ -227,7 +270,9 @@
     {
       "id": "media-qa",
       "name": "Media QA",
-      "capabilities": ["media-qa"],
+      "capabilities": [
+        "media-qa"
+      ],
       "status": "available",
       "metadata": {
         "mode": "media-qa",
@@ -238,7 +283,9 @@
     {
       "id": "media-transcription",
       "name": "Media Transcription",
-      "capabilities": ["media-transcription"],
+      "capabilities": [
+        "media-transcription"
+      ],
       "status": "available",
       "metadata": {
         "mode": "media-transcription",
@@ -249,7 +296,9 @@
     {
       "id": "resolve-bridge",
       "name": "DaVinci Resolve Bridge",
-      "capabilities": ["resolve-bridge"],
+      "capabilities": [
+        "resolve-bridge"
+      ],
       "status": "available",
       "metadata": {
         "mode": "resolve-bridge",
@@ -260,7 +309,9 @@
     {
       "id": "social-autonomy",
       "name": "Social Autonomy Director",
-      "capabilities": ["social-autonomy"],
+      "capabilities": [
+        "social-autonomy"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-autonomy",
@@ -271,7 +322,9 @@
     {
       "id": "social-analytics",
       "name": "Social Analytics",
-      "capabilities": ["social-analytics"],
+      "capabilities": [
+        "social-analytics"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-analytics",
@@ -281,7 +334,9 @@
     {
       "id": "social-actions",
       "name": "Social Action Bus",
-      "capabilities": ["social-actions"],
+      "capabilities": [
+        "social-actions"
+      ],
       "status": "available",
       "metadata": {
         "mode": "social-actions",
@@ -291,7 +346,9 @@
     {
       "id": "opportunity-analyst",
       "name": "Opportunity Analyst",
-      "capabilities": ["opportunity-analysis"],
+      "capabilities": [
+        "opportunity-analysis"
+      ],
       "status": "available",
       "metadata": {
         "mode": "analysis",
@@ -301,7 +358,9 @@
     {
       "id": "review-miner",
       "name": "Review Miner",
-      "capabilities": ["review-mining"],
+      "capabilities": [
+        "review-mining"
+      ],
       "status": "available",
       "metadata": {
         "mode": "review-mining",
@@ -315,7 +374,9 @@
     {
       "id": "automation-designer",
       "name": "Automation Designer",
-      "capabilities": ["automation-design"],
+      "capabilities": [
+        "automation-design"
+      ],
       "status": "available",
       "metadata": {
         "mode": "automation-design",
@@ -325,7 +386,9 @@
     {
       "id": "automation-builder",
       "name": "Automation Builder",
-      "capabilities": ["automation-build"],
+      "capabilities": [
+        "automation-build"
+      ],
       "status": "available",
       "metadata": {
         "mode": "automation-build",
@@ -335,7 +398,9 @@
     {
       "id": "qa-validator",
       "name": "QA Validator",
-      "capabilities": ["qa-validation"],
+      "capabilities": [
+        "qa-validation"
+      ],
       "status": "available",
       "metadata": {
         "mode": "qa",
@@ -345,7 +410,9 @@
     {
       "id": "promotion-gate",
       "name": "Promotion Gate",
-      "capabilities": ["promotion-gate"],
+      "capabilities": [
+        "promotion-gate"
+      ],
       "status": "available",
       "metadata": {
         "mode": "promotion",
@@ -355,7 +422,9 @@
     {
       "id": "dependency-provisioner",
       "name": "Dependency Provisioner",
-      "capabilities": ["dependency-provision"],
+      "capabilities": [
+        "dependency-provision"
+      ],
       "status": "available",
       "metadata": {
         "mode": "provisioning",
@@ -365,11 +434,104 @@
     {
       "id": "workflow-compiler",
       "name": "Workflow Compiler",
-      "capabilities": ["workflow-compile"],
+      "capabilities": [
+        "workflow-compile"
+      ],
       "status": "available",
       "metadata": {
         "mode": "compiler",
         "priority": 52
+      }
+    },
+    {
+      "id": "automation-builder-fallback",
+      "name": "Automation Builder Fallback",
+      "capabilities": [
+        "automation-build"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "automation-build-fallback",
+        "priority": 53,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "qa-validator-fallback",
+      "name": "QA Validator Fallback",
+      "capabilities": [
+        "qa-validation"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "qa-fallback",
+        "priority": 49,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "promotion-gate-fallback",
+      "name": "Promotion Gate Fallback",
+      "capabilities": [
+        "promotion-gate"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "promotion-fallback",
+        "priority": 44,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "dependency-provisioner-fallback",
+      "name": "Dependency Provisioner Fallback",
+      "capabilities": [
+        "dependency-provision"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "provisioning-fallback",
+        "priority": 47,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "workflow-compiler-fallback",
+      "name": "Workflow Compiler Fallback",
+      "capabilities": [
+        "workflow-compile"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "compiler-fallback",
+        "priority": 51,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "media-qa-fallback",
+      "name": "Media QA Fallback",
+      "capabilities": [
+        "media-qa"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "media-qa-fallback",
+        "priority": 75,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "media-transcription-fallback",
+      "name": "Media Transcription Fallback",
+      "capabilities": [
+        "media-transcription"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "media-transcription-fallback",
+        "priority": 72,
+        "role": "independent_resilience_fallback"
       }
     }
   ]

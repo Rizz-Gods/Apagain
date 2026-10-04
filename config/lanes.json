@@ -16,6 +16,48 @@
         "capability": "reasoning",
         "action": "prompt"
       }
+    ],
+    "automation-build": [
+      {
+        "capability": "automation-build",
+        "action": "prompt"
+      }
+    ],
+    "qa-validation": [
+      {
+        "capability": "qa-validation",
+        "action": "prompt"
+      }
+    ],
+    "promotion-gate": [
+      {
+        "capability": "promotion-gate",
+        "action": "prompt"
+      }
+    ],
+    "dependency-provision": [
+      {
+        "capability": "dependency-provision",
+        "action": "prompt"
+      }
+    ],
+    "workflow-compile": [
+      {
+        "capability": "workflow-compile",
+        "action": "prompt"
+      }
+    ],
+    "media-qa": [
+      {
+        "capability": "media-qa",
+        "action": "prompt"
+      }
+    ],
+    "media-transcription": [
+      {
+        "capability": "media-transcription",
+        "action": "prompt"
+      }
     ]
   }
 }

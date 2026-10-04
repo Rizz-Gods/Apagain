@@ -157,7 +157,9 @@
         "research"
       ],
       "capability_grants": {
-        "review-mining": ["browser_read"]
+        "review-mining": [
+          "browser_read"
+        ]
       },
       "objective": "Mine review and complaint evidence from already-collected research when browser review scraping is unavailable."
     },
@@ -278,6 +280,62 @@
     "workflow-compiler": {
       "department": "engineering",
       "objective": "Build, compile, provision, and improve reliable automation infrastructure."
+    },
+    "automation-builder-fallback": {
+      "department": "engineering",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Build safe automation artifacts independently when the primary builder is unavailable."
+    },
+    "qa-validator-fallback": {
+      "department": "ops",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Perform provider-independent structural QA when the primary validator is unavailable."
+    },
+    "promotion-gate-fallback": {
+      "department": "ops",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Apply conservative promotion decisions independently when the primary gate is unavailable."
+    },
+    "dependency-provisioner-fallback": {
+      "department": "engineering",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Produce allowlisted dependency plans independently without mutating the environment."
+    },
+    "workflow-compiler-fallback": {
+      "department": "engineering",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Compile provider-neutral workflow drafts independently when the primary compiler is unavailable."
+    },
+    "media-qa-fallback": {
+      "department": "media",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Perform filesystem-structural media QA when ffprobe-backed QA is unavailable."
+    },
+    "media-transcription-fallback": {
+      "department": "media",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Import transcript sidecars or supplied transcript text when speech recognition is unavailable."
     }
   }
 }

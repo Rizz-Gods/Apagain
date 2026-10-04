@@ -46,6 +46,11 @@ from oth.core.resolve_bridge import ResolveBridge
 from oth.core.media_ingest import MediaIngest
 from oth.core.media_transcription import MediaTranscription
 from oth.core.media_qa import MediaQA
+from oth.core.resilient_fallbacks import (
+    AutomationBuilderFallback, QAFallback, PromotionFallback,
+    DependencyProvisionFallback, WorkflowCompilerFallback,
+    MediaQAFallback, MediaTranscriptionFallback,
+)
 
 class OTHKernel:
     def __init__(self, root: str | Path):
@@ -97,8 +102,10 @@ class OTHKernel:
             elif mode == "automation-build":
                 self.workers.append(AutomationBuilder(self.root))
                 modes.add("automation-build")
+                modes.add("automation-build")
             elif mode == "qa":
                 self.workers.append(QAValidator(self.root))
+                modes.add("qa")
                 modes.add("qa")
             elif mode == "promotion":
                 self.workers.append(PromotionGate())
@@ -166,6 +173,27 @@ class OTHKernel:
             elif mode == "media-qa":
                 self.workers.append(MediaQA(self.root))
                 modes.add("media-qa")
+            elif mode == "automation-build-fallback":
+                self.workers.append(AutomationBuilderFallback(self.root))
+                modes.add("automation-build-fallback")
+            elif mode == "qa-fallback":
+                self.workers.append(QAFallback(self.root))
+                modes.add("qa-fallback")
+            elif mode == "promotion-fallback":
+                self.workers.append(PromotionFallback())
+                modes.add("promotion-fallback")
+            elif mode == "provisioning-fallback":
+                self.workers.append(DependencyProvisionFallback())
+                modes.add("provisioning-fallback")
+            elif mode == "compiler-fallback":
+                self.workers.append(WorkflowCompilerFallback(self.root))
+                modes.add("compiler-fallback")
+            elif mode == "media-qa-fallback":
+                self.workers.append(MediaQAFallback(self.root))
+                modes.add("media-qa-fallback")
+            elif mode == "media-transcription-fallback":
+                self.workers.append(MediaTranscriptionFallback(self.root))
+                modes.add("media-transcription-fallback")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
