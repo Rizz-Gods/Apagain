@@ -31,7 +31,7 @@ class PilotPlanner:
         (("transcrib", "subtitle", "caption"), "transcription"),
         (("edit", "editing", "render", "video", "media"), "media"),
         (("resolve",), "resolve"),
-        (("build", "automation", "workflow", "saas", "product"), "build"),
+        (("implement", "code", "refactor", "debug", "repair", "fix", "execute", "modify", "develop", "build", "create", "work on"), "engineering"),
     )
 
     def plan(self, instruction: str) -> PilotPlan:
@@ -174,28 +174,23 @@ class PilotPlanner:
                 ),
             )
 
-        if route == "build":
-            task = PilotTaskSpec(
-                "scout",
-                "scan",
-                {
-                    "queries": [
-                        text,
-                        f"{text} competitors complaints alternatives",
-                        f"{text} manual workflow demand",
-                    ],
-                    "risk": "safe",
-                    "max_retries": 1,
-                    "next": [{
-                        "capability": "review-mining",
-                        "action": "mine",
-                        "priority": 68,
-                        "payload": {"input_from": "event.output"},
-                    }],
-                },
-                76,
+        if route == "engineering":
+            return PilotPlan(
+                text,
+                "engineering execution -> verification -> repair loop",
+                (
+                    PilotTaskSpec(
+                        "engineering",
+                        "execute",
+                        {
+                            "prompt": text,
+                            "risk": "local_write",
+                            "max_retries": 1,
+                        },
+                        95,
+                    ),
+                ),
             )
-            return PilotPlan(text, "discover -> validate -> design -> build -> QA -> promotion", (task,))
 
         return PilotPlan(
             text,

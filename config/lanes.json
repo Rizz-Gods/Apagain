@@ -17,6 +17,12 @@
         "action": "prompt"
       }
     ],
+    "engineering": [
+      {
+        "capability": "engineering",
+        "action": "execute"
+      }
+    ],
     "automation-build": [
       {
         "capability": "automation-build",

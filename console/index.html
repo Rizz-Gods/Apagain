@@ -47,7 +47,32 @@ async function openConv(id){
   current=id; const r=await api('/api/conversations/'+id+'/messages'); const box=$('#messages'); box.innerHTML='';
   r.items.forEach(m=>addMsg(m.role,m.content)); box.scrollTop=box.scrollHeight;
 }
-function addMsg(role,text){const d=document.createElement('div');d.className='msg '+role;d.textContent=text;$('#messages').appendChild(d)}
+function addMsg(role,text){const d=document.createElement('div');d.className='msg '+role;d.textContent=text;$('#messages').appendChild(d);return d}
+async function watchMission(rootIds){
+  const watched=[...rootIds];
+  const started=Date.now();
+  while(Date.now()-started < 30*60*1000){
+    const snapshots=await Promise.all(watched.map(id=>api('/api/tasks/'+id)));
+    const tasks=snapshots.map(x=>x.task);
+    const terminal=tasks.every(t=>['succeeded','failed','blocked'].includes(t.status));
+    $('#status').textContent=tasks.map(t=>t.status).join(' · ');
+    if(terminal){
+      const summary=tasks.map(t=>{
+        const event=snapshots.find(x=>x.task.id===t.id)?.latest_event;
+        if(t.status==='succeeded') return 'Completed: '+t.capability;
+        if(t.status==='blocked') return 'Blocked: '+t.capability;
+        const error=event?.payload?.error || event?.payload?.reason || 'execution failed';
+        return 'Failed: '+t.capability+' — '+error;
+      }).join('\n');
+      addMsg('assistant',summary);
+      $('#messages').scrollTop=$('#messages').scrollHeight;
+      return;
+    }
+    await new Promise(resolve=>setTimeout(resolve,1500));
+  }
+  addMsg('assistant','Mission is still running. OTH continues execution through the daemon; this console will not invent completion.');
+  $('#messages').scrollTop=$('#messages').scrollHeight;
+}
 async function ensureConv(){
   if(current)return;
   const r=await api('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'OTH Mission'})});
@@ -58,6 +83,9 @@ async function send(){
   await ensureConv(); addMsg('user',text); input.value='';
   const r=await api('/api/conversations/'+current+'/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:text})});
   addMsg('assistant',r.content); $('#messages').scrollTop=$('#messages').scrollHeight;
+  if(r.provider==='oth-kernel' && r.mission?.root_task_ids?.length){
+    watchMission(r.mission.root_task_ids);
+  }
 }
 $('#send').onclick=send; $('#input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
 $('#new').onclick=async()=>{current=null;$('#messages').innerHTML='';await ensureConv();};

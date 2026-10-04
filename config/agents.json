@@ -743,6 +743,32 @@
       }
     },
     {
+      "id": "opencode-engineer",
+      "name": "OpenCode Engineering Worker",
+      "capabilities": [
+        "engineering"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "engineering-opencode",
+        "priority": 95,
+        "role": "execution_grade_software_engineering"
+      }
+    },
+    {
+      "id": "engineering-audit-fallback",
+      "name": "Engineering Audit Fallback",
+      "capabilities": [
+        "engineering"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "engineering-fallback",
+        "priority": 25,
+        "role": "degraded_provider_independent_fallback"
+      }
+    },
+    {
       "id": "browser-http-fallback",
       "name": "Browser HTTP Fallback",
       "capabilities": [

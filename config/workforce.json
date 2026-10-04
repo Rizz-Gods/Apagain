@@ -40,6 +40,14 @@
         "read"
       ]
     },
+    "engineering": {
+      "department": "engineering",
+      "risk": "local_write",
+      "required_permissions": [
+        "read",
+        "local_execute"
+      ]
+    },
     "scout": {
       "department": "research",
       "risk": "safe",
@@ -133,6 +141,22 @@
         "local_execute"
       ],
       "objective": "Build, compile, provision, and improve reliable automation infrastructure."
+    },
+    "opencode-engineer": {
+      "department": "engineering",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Execute software missions directly, run verification, repair failures, and return auditable results."
+    },
+    "engineering-audit-fallback": {
+      "department": "engineering",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Audit and report honestly when the execution-grade engineering provider is unavailable."
     },
     "opportunity-analyst-fallback": {
       "department": "business",

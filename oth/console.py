@@ -1,5 +1,6 @@
 import json
 import os
+import sqlite3
 import uuid
 import urllib.request
 from contextlib import contextmanager
@@ -58,11 +59,34 @@ MISSION_PREFIXES = (
     "build ", "create ", "implement ", "develop ", "fix ", "repair ",
     "set up ", "setup ", "configure ", "continue ", "run ", "deploy ",
     "automate ", "design ", "make ", "add ", "remove ", "refactor ",
+    "execute ", "finish ", "work on ",
+)
+
+EXECUTE_EXISTING = (
+    "execute the mission",
+    "execute mission",
+    "do the mission",
+    "continue the mission",
+    "continue with the mission",
+    "finish the mission",
 )
 
 def is_mission(text: str) -> bool:
     lowered = text.strip().lower()
-    return lowered.startswith(MISSION_PREFIXES)
+    return lowered.startswith(MISSION_PREFIXES) or lowered in EXECUTE_EXISTING
+
+def resolve_mission(conversation_id: str, text: str) -> str:
+    lowered = text.strip().lower()
+    if lowered not in EXECUTE_EXISTING:
+        return text.strip()
+    history = STORE.messages(conversation_id, 80)
+    for item in reversed(history):
+        if item["role"] != "user":
+            continue
+        candidate = item["content"].strip()
+        if candidate and candidate.lower() not in EXECUTE_EXISTING:
+            return candidate
+    return text.strip()
 
 def queue_mission(text: str):
     kernel = OTHKernel(ROOT)
@@ -150,6 +174,39 @@ class Handler(BaseHTTPRequestHandler):
             conversation_id = self.path.split("/")[3]
             self.json_response(200, {"items": STORE.messages(conversation_id)})
             return
+        if self.path.startswith("/api/tasks/"):
+            task_id = self.path.split("/")[3]
+            db = sqlite3.connect(ROOT / "data" / "oth.db")
+            db.row_factory = sqlite3.Row
+            task = db.execute(
+                "SELECT id, capability, action, status, priority, created_at, updated_at "
+                "FROM tasks WHERE id=?",
+                (task_id,),
+            ).fetchone()
+            event = db.execute(
+                "SELECT kind, payload, created_at FROM events "
+                "WHERE task_id=? ORDER BY rowid DESC LIMIT 1",
+                (task_id,),
+            ).fetchone()
+            db.close()
+            if not task:
+                self.json_response(404, {"error": "task not found"})
+                return
+            payload = {}
+            if event:
+                try:
+                    payload = json.loads(event["payload"] or "{}")
+                except Exception:
+                    payload = {"raw": event["payload"]}
+            self.json_response(200, {
+                "task": dict(task),
+                "latest_event": {
+                    "kind": event["kind"],
+                    "created_at": event["created_at"],
+                    "payload": payload,
+                } if event else None,
+            })
+            return
         if self.path == "/api/mission":
             mission_path = ROOT / "data" / "pilot_state.json"
             mission = json.loads(mission_path.read_text(encoding="utf-8")) if mission_path.exists() else {}
@@ -196,7 +253,8 @@ class Handler(BaseHTTPRequestHandler):
             STORE.add_message(conversation_id, "user", text)
 
             if is_mission(text):
-                queued = queue_mission(text)
+                mission_text = resolve_mission(conversation_id, text)
+                queued = queue_mission(mission_text)
                 answer = (
                     "Mission queued into the OTH execution kernel.\n\n"
                     f"Goal: {queued['goal']}\n"

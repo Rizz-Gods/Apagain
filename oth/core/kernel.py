@@ -27,6 +27,8 @@ from oth.workers.external import ExternalAgentWorker
 from oth.core.scout import ScoutWorker
 from oth.core.web_scout import WebScoutHTTPWorker
 from oth.core.local_reasoner import LocalReasonerWorker
+from oth.core.engineering import EngineeringWorker
+from oth.core.engineering_fallback import EngineeringFallback
 from oth.core.social_market import SocialMarketWorker
 from oth.core.social_accounts import SocialAccountManager
 from oth.core.social_content import SocialContentEngine
@@ -80,6 +82,12 @@ class OTHKernel:
             mode = agent.metadata.get("mode")
             if mode == "local-reasoning":
                 self.workers.append(LocalReasonerWorker())
+            elif mode == "engineering-opencode":
+                self.workers.append(EngineeringWorker(self.root))
+                modes.add("engineering")
+            elif mode == "engineering-fallback":
+                self.workers.append(EngineeringFallback(self.root))
+                modes.add("engineering")
             elif mode == "browser":
                 self.workers.append(BrowserWorker(agent))
             elif mode == "scout":
