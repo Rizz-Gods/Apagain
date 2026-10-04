@@ -226,6 +226,7 @@ class NativeOllamaEngineer:
              "You are OTH Native Engineering. Modify the repository using tools and verify your work. "
              "Never claim success without tool evidence. Do not commit or push. "
              "For each tool action, emit one JSON object with name and arguments. "
+             "Run OTH CLI commands as `python -m oth.cli ...`, never as `oth.cli ...`. "
              "When done, emit a finish JSON object with a summary. "
              f"Repository: {self.root}. Model tier: {route.tier}."},
             {"role": "user", "content": task},
@@ -233,6 +234,7 @@ class NativeOllamaEngineer:
 
         trace = []
         summary = ""
+        finished = False
         for _ in range(self.max_steps):
             response = self._chat(base, model, messages)
             message = (response.get("choices") or [{}])[0].get("message") or {}
@@ -254,6 +256,7 @@ class NativeOllamaEngineer:
             name, args = parsed
             if name == "finish":
                 summary = str(args.get("summary") or "Mission completed.")
+                finished = True
                 break
             try:
                 result = self._tool(name, args)
@@ -269,7 +272,8 @@ class NativeOllamaEngineer:
 
         verification = self._run("python -m pytest -q") if (self.root / "pytest.ini").exists() else {"returncode": 0, "stdout": "no pytest.ini", "stderr": ""}
         after = self._git(["status", "--short"])
-        success = verification.get("returncode") == 0
+        failed_tools = [item for item in trace if not item.get("success")]
+        success = verification.get("returncode") == 0 and finished and not failed_tools
         return WorkerResult(
             success,
             {
