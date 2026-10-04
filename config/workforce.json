@@ -142,6 +142,14 @@
       ],
       "objective": "Build, compile, provision, and improve reliable automation infrastructure."
     },
+    "ollama-engineer": {
+      "department": "engineering",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Execute software missions directly through the native OTH tool loop, verify changes, and repair failures."
+    },
     "opencode-engineer": {
       "department": "engineering",
       "permissions": [

@@ -743,6 +743,19 @@
       }
     },
     {
+      "id": "ollama-engineer",
+      "name": "Native Ollama Engineering Worker",
+      "capabilities": [
+        "engineering"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "engineering-ollama",
+        "priority": 98,
+        "role": "native_local_execution_grade_software_engineering"
+      }
+    },
+    {
       "id": "opencode-engineer",
       "name": "OpenCode Engineering Worker",
       "capabilities": [

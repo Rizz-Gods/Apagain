@@ -27,7 +27,7 @@ class ModelRouter:
     def _load(self) -> dict:
         default = {
             "models": {
-                "local": {"provider": "ollama", "model": "qwen2.5-coder:0.5b-instruct-q5_1"},
+                "local": {"provider": "ollama", "model": "qwen2.5-coder:1.5b-instruct"},
                 "standard": {"provider": "ollama", "model": "qwen2.5-coder:1.5b-instruct"},
                 "strong": {"provider": "ollama", "model": "qwen2.5-coder:7b-instruct"},
                 "frontier": {"provider": "", "model": ""},

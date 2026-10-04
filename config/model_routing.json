@@ -2,7 +2,7 @@
   "models": {
     "local": {
       "provider": "ollama",
-      "model": "qwen2.5-coder:0.5b-instruct-q5_1"
+      "model": "qwen2.5-coder:1.5b-instruct"
     },
     "standard": {
       "provider": "ollama",

@@ -28,6 +28,7 @@ from oth.core.scout import ScoutWorker
 from oth.core.web_scout import WebScoutHTTPWorker
 from oth.core.local_reasoner import LocalReasonerWorker
 from oth.core.engineering import EngineeringWorker
+from oth.core.ollama_engineer import NativeOllamaEngineer
 from oth.core.engineering_fallback import EngineeringFallback
 from oth.core.social_market import SocialMarketWorker
 from oth.core.social_accounts import SocialAccountManager
@@ -82,6 +83,9 @@ class OTHKernel:
             mode = agent.metadata.get("mode")
             if mode == "local-reasoning":
                 self.workers.append(LocalReasonerWorker())
+            elif mode == "engineering-ollama":
+                self.workers.append(NativeOllamaEngineer(self.root))
+                modes.add("engineering")
             elif mode == "engineering-opencode":
                 self.workers.append(EngineeringWorker(self.root))
                 modes.add("engineering")
