@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .core.console_store import ConsoleStore
 from .core.pilot import PilotPlanner
+from .core.kernel import OTHKernel
 
 ROOT = Path(__file__).resolve().parents[1]
 STORE = ConsoleStore(ROOT / "data" / "console.db")
@@ -52,6 +53,31 @@ def call_model(messages):
         return data["choices"][0]["message"]["content"]
     except Exception:
         return None
+
+MISSION_PREFIXES = (
+    "build ", "create ", "implement ", "develop ", "fix ", "repair ",
+    "set up ", "setup ", "configure ", "continue ", "run ", "deploy ",
+    "automate ", "design ", "make ", "add ", "remove ", "refactor ",
+)
+
+def is_mission(text: str) -> bool:
+    lowered = text.strip().lower()
+    return lowered.startswith(MISSION_PREFIXES)
+
+def queue_mission(text: str):
+    kernel = OTHKernel(ROOT)
+    try:
+        planner = PilotPlanner()
+        plan = planner.submit(kernel, text)
+        return {
+            "queued": True,
+            "goal": plan["goal"],
+            "strategy": plan["strategy"],
+            "root_task_ids": plan["root_task_ids"],
+            "task_count": plan["task_count"],
+        }
+    finally:
+        kernel.close()
 
 def pilot_fallback(text: str):
     planner = PilotPlanner()
@@ -168,6 +194,30 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             STORE.add_message(conversation_id, "user", text)
+
+            if is_mission(text):
+                queued = queue_mission(text)
+                answer = (
+                    "Mission queued into the OTH execution kernel.\n\n"
+                    f"Goal: {queued['goal']}\n"
+                    f"Strategy: {queued['strategy']}\n"
+                    f"Root tasks: {', '.join(queued['root_task_ids'])}\n"
+                    "The OTH daemon will execute the queued graph."
+                )
+                STORE.add_message(
+                    conversation_id,
+                    "assistant",
+                    answer,
+                    {"provider": "oth-kernel", "mission": queued},
+                )
+                self.json_response(200, {
+                    "role": "assistant",
+                    "content": answer,
+                    "provider": "oth-kernel",
+                    "mission": queued,
+                })
+                return
+
             history = STORE.messages(conversation_id, 24)
             messages = [
                 {"role": "system", "content":
