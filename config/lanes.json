@@ -88,6 +88,36 @@
         "capability": "social-editor",
         "action": "prompt"
       }
+    ],
+    "media-assets": [
+      {
+        "capability": "media-assets",
+        "action": "prompt"
+      }
+    ],
+    "media-ingest": [
+      {
+        "capability": "media-ingest",
+        "action": "prompt"
+      }
+    ],
+    "media-production": [
+      {
+        "capability": "media-production",
+        "action": "prompt"
+      }
+    ],
+    "social-queue": [
+      {
+        "capability": "social-queue",
+        "action": "prompt"
+      }
+    ],
+    "social-actions": [
+      {
+        "capability": "social-actions",
+        "action": "prompt"
+      }
     ]
   }
 }

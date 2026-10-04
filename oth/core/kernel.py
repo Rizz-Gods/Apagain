@@ -52,6 +52,8 @@ from oth.core.resilient_fallbacks import (
     MediaQAFallback, MediaTranscriptionFallback,
     SocialAnalyticsFallback, SocialOptimizationFallback, SocialContentFallback,
     SocialPlannerFallback, SocialEditorialFallback,
+    MediaAssetsFallback, MediaIngestFallback, MediaProductionFallback,
+    SocialQueueFallback, SocialActionsFallback,
 )
 
 class OTHKernel:
@@ -211,6 +213,21 @@ class OTHKernel:
             elif mode == "social-editor-fallback":
                 self.workers.append(SocialEditorialFallback())
                 modes.add("social-editor-fallback")
+            elif mode == "media-assets-fallback":
+                self.workers.append(MediaAssetsFallback(self.root))
+                modes.add("media-assets-fallback")
+            elif mode == "media-ingest-fallback":
+                self.workers.append(MediaIngestFallback(self.root))
+                modes.add("media-ingest-fallback")
+            elif mode == "media-production-fallback":
+                self.workers.append(MediaProductionFallback())
+                modes.add("media-production-fallback")
+            elif mode == "social-queue-fallback":
+                self.workers.append(SocialQueueFallback(self.root))
+                modes.add("social-queue-fallback")
+            elif mode == "social-actions-fallback":
+                self.workers.append(SocialActionsFallback())
+                modes.add("social-actions-fallback")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:

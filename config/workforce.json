@@ -376,6 +376,46 @@
         "local_execute"
       ],
       "objective": "Create production-ready editorial briefs independently."
+    },
+    "media-assets-fallback": {
+      "department": "media",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Inspect and register media independently when the primary asset toolchain is unavailable."
+    },
+    "media-ingest-fallback": {
+      "department": "media",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Track media sources without silently performing network acquisition."
+    },
+    "media-production-fallback": {
+      "department": "media",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Generate provider-neutral production manifests independently of the primary renderer."
+    },
+    "social-queue-fallback": {
+      "department": "distribution",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Reconcile and plan social queue work without publishing externally."
+    },
+    "social-actions-fallback": {
+      "department": "distribution",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Prepare and diagnose social actions safely without external provider calls."
     }
   }
 }

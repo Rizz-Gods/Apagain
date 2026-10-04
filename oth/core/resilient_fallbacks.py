@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timezone
 import json
 import re
@@ -645,3 +646,335 @@ class SocialEditorialFallback(_BaseFallback):
             "count": len(briefs),
             "next": [],
         })
+
+class MediaAssetsFallback(_BaseFallback):
+    id = "media-assets-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root).resolve()
+        self.registry_path = self.root / "data" / "media_assets_fallback.json"
+        self.registry_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "media-assets"
+
+    def _load(self):
+        if not self.registry_path.exists():
+            return {"assets": []}
+        try:
+            return json.loads(self.registry_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"assets": []}
+
+    def _save(self, data):
+        self.registry_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def _resolve(self, ref):
+        path = Path(str(ref)).expanduser()
+        if not path.is_absolute():
+            path = self.root / path
+        path = path.resolve()
+        if not path.is_file() or not path.is_relative_to(self.root):
+            raise ValueError("media_ref must resolve inside the OTH workspace")
+        return path
+
+    @staticmethod
+    def _hash(path):
+        digest = hashlib.sha256()
+        with path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        if action == "list":
+            return FallbackResult(True, {"fallback": True, "assets": self._load()["assets"]})
+        if action not in {"inspect", "register", "normalize"}:
+            return self._unsupported("media-assets", action)
+        try:
+            path = self._resolve(source.get("media_ref", ""))
+        except Exception as exc:
+            return FallbackResult(False, {"fallback": True}, str(exc))
+        digest = self._hash(path)
+        metadata = {
+            "filename": path.name,
+            "size_bytes": path.stat().st_size,
+            "suffix": path.suffix.lower(),
+        }
+        if action == "inspect":
+            return FallbackResult(True, {
+                "fallback": True,
+                "path": str(path),
+                "sha256": digest,
+                "metadata": metadata,
+                "inspection_mode": "filesystem",
+            })
+        data = self._load()
+        existing = next((x for x in data["assets"] if x.get("sha256") == digest), None)
+        if existing is None:
+            existing = {
+                "media_id": f"fallback-media-{len(data['assets']) + 1}",
+                "source_path": str(path.relative_to(self.root)),
+                "sha256": digest,
+                "metadata": metadata,
+                "status": "ready",
+                "fallback": True,
+            }
+            data["assets"].append(existing)
+        if action == "register":
+            self._save(data)
+            return FallbackResult(True, {"fallback": True, "asset": existing})
+        if path.suffix.lower() == ".mp4":
+            existing["normalized_path"] = str(path.relative_to(self.root))
+            existing["status"] = "ready"
+            existing["normalization_mode"] = "already_compatible"
+            self._save(data)
+            return FallbackResult(True, {"fallback": True, "asset": existing})
+        self._save(data)
+        return FallbackResult(True, {
+            "fallback": True,
+            "asset": existing,
+            "status": "needs_primary_normalizer",
+            "normalization_mode": "plan_only",
+            "reason": "Non-MP4 media requires the primary media toolchain for safe transcoding.",
+        })
+
+
+class MediaIngestFallback(_BaseFallback):
+    id = "media-ingest-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root).resolve()
+        self.registry = self.root / "data" / "media_sources_fallback.json"
+        self.registry.parent.mkdir(parents=True, exist_ok=True)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "media-ingest"
+
+    def _load(self):
+        if not self.registry.exists():
+            return {"sources": []}
+        try:
+            return json.loads(self.registry.read_text(encoding="utf-8"))
+        except Exception:
+            return {"sources": []}
+
+    def _save(self, data):
+        self.registry.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        if action == "list":
+            return FallbackResult(True, {"fallback": True, "sources": self._load()["sources"]})
+        if action != "download":
+            return self._unsupported("media-ingest", action)
+        url = str(source.get("url", "")).strip()
+        if not url:
+            return FallbackResult(False, {"fallback": True}, "url is required")
+        rows = self._load()
+        existing = next((x for x in rows["sources"] if x.get("url") == url), None)
+        if existing:
+            return FallbackResult(True, {"fallback": True, "sources": [existing], "count": 1})
+        row = {
+            "source_id": f"fallback-source-{len(rows['sources']) + 1}",
+            "url": url,
+            "title": source.get("title"),
+            "uploader": source.get("uploader"),
+            "duration": source.get("duration"),
+            "status": "awaiting_download_backend",
+            "network": False,
+            "fallback": True,
+        }
+        rows["sources"].append(row)
+        self._save(rows)
+        return FallbackResult(True, {
+            "fallback": True,
+            "sources": [row],
+            "count": 1,
+            "status": "awaiting_download_backend",
+            "next": [],
+        })
+
+
+class MediaProductionFallback(_BaseFallback):
+    id = "media-production-fallback"
+
+    def supports(self, capability: str) -> bool:
+        return capability == "media-production"
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        if action not in {"plan", "list", "review"}:
+            return self._unsupported("media-production", action)
+        source = payload.get("input", {})
+        if action in {"list", "review"}:
+            return FallbackResult(True, {"fallback": True, "manifests": []})
+        briefs = source.get("briefs") or []
+        if isinstance(briefs, dict):
+            briefs = [briefs]
+        manifests = []
+        for brief in briefs[:20]:
+            platform = str(brief.get("platform", "social")).lower()
+            duration = max(int(brief.get("duration_seconds") or 30), 5)
+            aspect = "9:16" if platform in {"instagram", "youtube", "linkedin"} else "1:1"
+            manifests.append({
+                "manifest_id": f"fallback-prod-{len(manifests) + 1}",
+                "brief_id": brief.get("brief_id"),
+                "campaign_id": brief.get("campaign_id"),
+                "platform": platform,
+                "format": brief.get("format"),
+                "template": {
+                    "aspect_ratio": aspect,
+                    "duration_seconds": duration,
+                    "captions": "sentence_timed",
+                },
+                "timeline": [
+                    {"id": "hook", "start": 0, "end": min(2, duration), "purpose": "hook"},
+                    {"id": "proof", "start": min(2, duration), "end": max(duration - 3, 2), "purpose": "proof"},
+                    {"id": "cta", "start": max(duration - 3, 0), "end": duration, "purpose": "cta"},
+                ],
+                "render": {
+                    "resolution": "1080x1920" if aspect == "9:16" else "1080x1080",
+                    "frame_rate": 30,
+                    "codec": "h264",
+                    "container": "mp4",
+                },
+                "status": "ready_for_primary_renderer",
+                "fallback": True,
+            })
+        return FallbackResult(True, {
+            "fallback": True,
+            "manifests": manifests,
+            "count": len(manifests),
+            "next": [],
+        })
+
+
+class SocialQueueFallback(_BaseFallback):
+    id = "social-queue-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+        self.path = self.root / "data" / "social_queue_fallback.json"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-queue"
+
+    def _load(self):
+        if not self.path.exists():
+            return {"items": []}
+        try:
+            return json.loads(self.path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"items": []}
+
+    def _save(self, data):
+        self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        data = self._load()
+        content_id = str(source.get("content_id", "")).strip()
+
+        if action == "list":
+            return FallbackResult(True, {"fallback": True, "items": data["items"]})
+        if action in {"approve", "schedule", "attach_media"}:
+            row = next((x for x in data["items"] if x.get("content_id") == content_id), None)
+            if row is None:
+                return FallbackResult(False, {"fallback": True}, "content_id not found")
+            if action == "approve":
+                row.setdefault("approval", {})["status"] = "approved"
+            elif action == "schedule":
+                row["due_at"] = source.get("due_at")
+            else:
+                row.setdefault("payload", {})["media_ref"] = source.get("media_ref")
+                row.setdefault("approval", {})["status"] = "pending"
+            self._save(data)
+            return FallbackResult(True, {"fallback": True, "item": row})
+
+        if action != "reconcile":
+            return self._unsupported("social-queue", action)
+
+        held, dispatches, scheduled = [], [], 0
+        now = datetime.now(timezone.utc)
+        for row in data["items"]:
+            approval = row.get("approval", {}).get("status", "pending")
+            due_at = row.get("due_at")
+            if approval != "approved":
+                held.append({"content_id": row.get("content_id"), "reason": "awaiting_approval"})
+                continue
+            if due_at:
+                try:
+                    if datetime.fromisoformat(str(due_at)) > now:
+                        scheduled += 1
+                        continue
+                except ValueError:
+                    pass
+            platform = str(row.get("platform", "")).lower()
+            dispatches.append({
+                "capability": "social-actions",
+                "action": "publish_video" if platform == "youtube" else "publish_text",
+                "priority": 70,
+                "payload": {
+                    "approved": True,
+                    "input": {
+                        "content_id": row.get("content_id"),
+                        "provider": platform,
+                        **row.get("payload", {}),
+                    },
+                },
+                "fallback": True,
+            })
+        return FallbackResult(True, {
+            "fallback": True,
+            "held": held,
+            "dispatches": dispatches,
+            "scheduled": scheduled,
+            "external_actions": False,
+            "note": "Fallback reconcile emits approval-preserving dispatch plans; it never publishes.",
+        })
+
+
+class SocialActionsFallback(_BaseFallback):
+    id = "social-actions-fallback"
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-actions"
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        if action == "doctor":
+            providers = []
+            for provider in ("linkedin", "youtube", "x", "instagram"):
+                providers.append({
+                    "provider": provider,
+                    "status": "fallback_offline",
+                    "live": False,
+                    "network_called": False,
+                })
+            return FallbackResult(True, {
+                "fallback": True,
+                "providers": providers,
+                "live_actions_available": False,
+            })
+        if action == "prepare_publish":
+            source = payload.get("input", {})
+            return FallbackResult(True, {
+                "fallback": True,
+                "status": "approval_required",
+                "live_action_available": False,
+                "provider": source.get("provider"),
+                "content_id": source.get("content_id"),
+                "reason": "Independent fallback will not perform external publication.",
+            })
+        if action in {"publish_text", "publish_video"}:
+            return FallbackResult(True, {
+                "fallback": True,
+                "status": "external_action_unavailable",
+                "live": False,
+                "approval_required": True,
+                "executed": False,
+                "reason": "No provider call performed by fallback.",
+                "input": payload.get("input", {}),
+            })
+        return self._unsupported("social-actions", action)

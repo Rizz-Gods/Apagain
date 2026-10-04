@@ -598,6 +598,71 @@
         "priority": 79,
         "role": "independent_resilience_fallback"
       }
+    },
+    {
+      "id": "media-assets-fallback",
+      "name": "Media Asset Fallback",
+      "capabilities": [
+        "media-assets"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "media-assets-fallback",
+        "priority": 66,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "media-ingest-fallback",
+      "name": "Media Ingest Fallback",
+      "capabilities": [
+        "media-ingest"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "media-ingest-fallback",
+        "priority": 64,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "media-production-fallback",
+      "name": "Media Production Fallback",
+      "capabilities": [
+        "media-production"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "media-production-fallback",
+        "priority": 81,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-queue-fallback",
+      "name": "Social Queue Fallback",
+      "capabilities": [
+        "social-queue"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-queue-fallback",
+        "priority": 75,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-actions-fallback",
+      "name": "Social Actions Fallback",
+      "capabilities": [
+        "social-actions"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-actions-fallback",
+        "priority": 74,
+        "role": "independent_resilience_fallback"
+      }
     }
   ]
 }
