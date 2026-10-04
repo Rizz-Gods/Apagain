@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission Resume and Retry Control
+## Current subsystem: Mission Approval Continuity
 
 Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
 
-Previous subsystem: Mission Recovery Reconciliation — complete and live-validated
+Previous subsystem: Mission Resume and Retry Control — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -83,6 +83,13 @@ Previous subsystem: Mission Recovery Reconciliation — complete and live-valida
   - Console API: `POST /api/missions/{mission_id}/resume`
   - CLI: `python -m oth.cli mission status|resume ...`
   - Documentation: `docs/MISSION_RESUME.md`
+- Mission Approval Continuity subsystem:
+  - Policy-blocked tasks now update their mission to `blocked` with durable approval metadata.
+  - Mission-scoped approval can requeue one or all blocked tasks without duplicating graph nodes.
+  - Approval persists `approved=true` and `approved_by=operator` and re-enters the normal dispatcher.
+  - Console API: `POST /api/missions/{mission_id}/approve`
+  - CLI: `python -m oth.cli mission approve ...`
+  - Documentation: `docs/MISSION_APPROVAL.md`
 
 ### Verification achieved
 - Focused engineering tests: PASS
@@ -128,6 +135,12 @@ Previous subsystem: Mission Recovery Reconciliation — complete and live-valida
   - External-risk resume remained blocked without explicit approval and queued only after explicit approval.
   - Live Console HTTP endpoint validation passed against the real OTH databases.
   - Disposable failed mission was requeued through `POST /api/missions/{mission_id}/resume` and then removed.
+- Mission Approval Continuity verification: PASS
+  - Full OTH test suite passed with exit code 0 before live endpoint validation.
+  - Policy-blocked mission became durable `blocked` with approval metadata.
+  - Live Console HTTP approval endpoint requeued the exact blocked task.
+  - `approved_by=operator` persisted and the mission returned to `queued`.
+  - Disposable validation mission/task rows were removed after the check.
 - A real console mission previously exposed a false-positive success bug; this was corrected and committed.
 - Commit pushed:
   - `730720b` — `fix: reject false-positive native engineering success`
@@ -147,10 +160,10 @@ Previous subsystem: Mission Recovery Reconciliation — complete and live-valida
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Mission Resume and Retry Control is complete and live-validated.
+None. Mission Approval Continuity is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, or Mission Resume and Retry Control unless a regression appears. Continue with the next coherent OTH subsystem using all five as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, or Mission Approval Continuity unless a regression appears. Continue with the next coherent OTH subsystem using all six as established infrastructure.
 
 ## Repository
 Primary OTH directory:

@@ -104,6 +104,9 @@ def main(argv=None):
     mission_resume.add_argument("mission_id")
     mission_resume.add_argument("--task-id", action="append")
     mission_resume.add_argument("--approve-external", action="store_true")
+    mission_approve = mission_sub.add_parser("approve")
+    mission_approve.add_argument("mission_id")
+    mission_approve.add_argument("--task-id", action="append")
     opp = sub.add_parser("opportunities")
     opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
     opp_list = opp_sub.add_parser("list")
@@ -431,12 +434,20 @@ def main(argv=None):
                     payload = dict(mission)
                     payload["graph"] = kernel.missions.graph_for_mission(args.mission_id, kernel.db.path)
                     print(json.dumps(payload, indent=2))
-            else:
+            elif args.mission_cmd == "resume":
                 print(json.dumps(
                     kernel.resume_mission(
                         args.mission_id,
                         task_ids=args.task_id,
                         approve_external=args.approve_external,
+                    ),
+                    indent=2,
+                ))
+            else:
+                print(json.dumps(
+                    kernel.approve_mission(
+                        args.mission_id,
+                        task_ids=args.task_id,
                     ),
                     indent=2,
                 ))

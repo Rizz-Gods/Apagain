@@ -279,3 +279,45 @@ def test_external_failed_mission_requires_explicit_resume_approval(tmp_path):
     finally:
         kernel.close()
         missions.close()
+
+
+def test_policy_block_is_persisted_and_mission_approval_requeues_task(tmp_path):
+    write_minimal_config(tmp_path)
+    missions = MissionStateStore(tmp_path / "data" / "console.db")
+    kernel = OTHKernel(tmp_path)
+    try:
+        missions.create(
+            "conversation-1",
+            "Approval mission",
+            "external action approval",
+            mission_id="mission-approval",
+        )
+        task = kernel.submit(
+            "social-actions",
+            "publish_text",
+            {
+                "text": "approval-test",
+                "mission_id": "mission-approval",
+                "conversation_id": "conversation-1",
+                "max_retries": 0,
+            },
+            80,
+        )
+        missions.attach_root_tasks("mission-approval", [task.id])
+
+        result = kernel.dispatch(task.id)
+        assert result["status"] == "blocked"
+        state = missions.get("mission-approval")
+        assert state["status"] == "blocked"
+        assert state["latest_outcome"]["approval_required"] is True
+
+        approved = kernel.approve_mission("mission-approval")
+        assert approved["approved"] == [task.id]
+        assert approved["status"] == "queued"
+        assert kernel.db.get_task(task.id)["status"] == "queued"
+        refreshed = missions.get("mission-approval")
+        assert refreshed["status"] == "queued"
+        assert refreshed["latest_outcome"]["approval_granted"] is True
+    finally:
+        kernel.close()
+        missions.close()

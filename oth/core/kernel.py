@@ -361,15 +361,30 @@ class OTHKernel:
             task_payload["risk"] = "external"
         decision = self.policy.check(task_payload)
         if not decision.allowed:
-            self.db.update_task(task_id, "blocked", now_iso())
-            self.db.add_event(task_id, "task.approval_required", {"reason": decision.reason}, now_iso())
+            now = now_iso()
+            self.db.update_task(task_id, "blocked", now)
+            self.db.add_event(task_id, "task.approval_required", {"reason": decision.reason}, now)
             self.db.add_event(
                 task_id,
                 "task.escalation_required",
                 {"target": "pilot", "reason": decision.reason},
-                now_iso(),
+                now,
             )
-            return {"status": "blocked", "reason": decision.reason}
+            mission_id = str(stored_payload.get("mission_id") or "").strip()
+            if mission_id:
+                self.missions.update_from_task(
+                    mission_id,
+                    task_id,
+                    "blocked",
+                    {"error": decision.reason, "approval_required": True},
+                    task_db=self.db.path,
+                )
+            return {
+                "status": "blocked",
+                "reason": decision.reason,
+                "approval_required": True,
+                "mission_id": mission_id or None,
+            }
 
         worker_map = {
             getattr(worker, "id", "builtin"): worker
@@ -388,16 +403,31 @@ class OTHKernel:
         ]
 
         if not executable_lanes:
-            self.db.update_task(task_id, "blocked", now_iso())
+            now = now_iso()
+            self.db.update_task(task_id, "blocked", now)
             reason = "no_worker" if not lane_candidates else "worker_runtime_unavailable"
-            self.db.add_event(task_id, "task.blocked", {"reason": reason}, now_iso())
+            self.db.add_event(task_id, "task.blocked", {"reason": reason}, now)
             self.db.add_event(
                 task_id,
                 "task.escalation_required",
                 {"target": "pilot", "reason": reason},
-                now_iso(),
+                now,
             )
-            return {"status": "blocked", "reason": reason}
+            mission_id = str(stored_payload.get("mission_id") or "").strip()
+            if mission_id:
+                self.missions.update_from_task(
+                    mission_id,
+                    task_id,
+                    "blocked",
+                    {"error": reason, "approval_required": reason != "no_worker"},
+                    task_db=self.db.path,
+                )
+            return {
+                "status": "blocked",
+                "reason": reason,
+                "approval_required": reason != "no_worker",
+                "mission_id": mission_id or None,
+            }
 
         self.db.update_task(task_id, "running", now_iso())
         self.db.add_event(
@@ -805,7 +835,6 @@ class OTHKernel:
             raise ValueError(f"Unknown task: {task_id}")
         if task["status"] != "blocked":
             return {"status": task["status"], "changed": False}
-        import json
         approved_payload = json.loads(task["payload"])
         approved_payload["approved"] = True
         approved_payload["approved_by"] = "operator"
@@ -813,7 +842,50 @@ class OTHKernel:
         self.db.update_task_payload(task_id, approved_payload, now)
         self.db.update_task(task_id, "queued", now)
         self.db.add_event(task_id, "task.approved", {"by": "operator"}, now)
-        return {"status": "queued", "changed": True}
+        mission_id = str(approved_payload.get("mission_id") or "").strip()
+        if mission_id:
+            self.missions.update_from_task(
+                mission_id,
+                task_id,
+                "queued",
+                {"approval_granted": True, "approved_by": "operator"},
+                task_db=self.db.path,
+            )
+        return {"status": "queued", "changed": True, "mission_id": mission_id or None}
+
+    def approve_mission(
+        self,
+        mission_id: str,
+        task_ids: list[str] | None = None,
+    ) -> dict:
+        mission = self.missions.get(mission_id)
+        if mission is None:
+            return {"status": "missing", "mission_id": mission_id}
+        graph = self.missions.graph_for_mission(mission_id, self.db.path)
+        nodes = {str(node["id"]): node for node in graph.get("nodes", [])}
+        requested = list(task_ids) if task_ids is not None else [
+            node_id for node_id, node in nodes.items() if node.get("status") == "blocked"
+        ]
+        approved = []
+        skipped = []
+        for task_id in requested:
+            node = nodes.get(task_id)
+            if not node or node.get("status") != "blocked":
+                skipped.append({"task_id": task_id, "reason": "not_blocked_or_not_in_mission"})
+                continue
+            result = self.approve(task_id)
+            if result.get("changed"):
+                approved.append(task_id)
+            else:
+                skipped.append({"task_id": task_id, "reason": "not_approvable", "status": result.get("status")})
+        self.missions.reconcile(self.db.path)
+        refreshed = self.missions.get(mission_id) or mission
+        return {
+            "mission_id": mission_id,
+            "status": refreshed["status"],
+            "approved": approved,
+            "skipped": skipped,
+        }
 
     def tasks(self):
         return [dict(r) for r in self.db.list_tasks()]
