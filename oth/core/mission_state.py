@@ -159,6 +159,82 @@ class MissionStateStore:
         self.db.commit()
         return self.get(mission_id)
 
+    def resume_failed_tasks(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+        task_ids: list[str] | None = None,
+        approved_task_ids: set[str] | None = None,
+        reason: str = "operator_resume",
+    ) -> dict[str, Any]:
+        mission = self.get(mission_id)
+        if mission is None:
+            return {"mission_id": mission_id, "queued": [], "skipped": [], "status": "missing"}
+        graph = self.graph_for_mission(mission_id, task_db)
+        nodes = {str(node["id"]): node for node in graph.get("nodes", [])}
+        requested = list(task_ids) if task_ids is not None else [
+            node_id for node_id, node in nodes.items() if node.get("status") == "failed"
+        ]
+        approved = set(approved_task_ids or set())
+        path = Path(task_db)
+        queued: list[str] = []
+        skipped: list[dict[str, Any]] = []
+        if not path.exists():
+            return {"mission_id": mission_id, "queued": [], "skipped": [{"reason": "task_db_missing"}], "status": mission["status"]}
+
+        try:
+            conn = sqlite3.connect(path)
+            conn.row_factory = sqlite3.Row
+            now = now_iso()
+            for task_id in requested:
+                node = nodes.get(task_id)
+                if not node or node.get("status") != "failed":
+                    skipped.append({"task_id": task_id, "reason": "not_failed_or_not_in_mission"})
+                    continue
+                row = conn.execute("SELECT payload FROM tasks WHERE id=?", (task_id,)).fetchone()
+                if not row:
+                    skipped.append({"task_id": task_id, "reason": "task_missing"})
+                    continue
+                payload = json.loads(row["payload"] or "{}")
+                payload["_failed_lane_workers"] = []
+                payload["_attempts"] = 0
+                payload["_resume_count"] = int(payload.get("_resume_count", 0)) + 1
+                if task_id in approved:
+                    payload["approved"] = True
+                    payload["approved_by"] = "operator"
+                conn.execute(
+                    "UPDATE tasks SET status='queued', payload=?, updated_at=? WHERE id=?",
+                    (json.dumps(payload, ensure_ascii=False), now, task_id),
+                )
+                conn.execute(
+                    "INSERT INTO events(task_id,kind,payload,created_at) VALUES(?,?,?,?)",
+                    (
+                        task_id,
+                        "mission.resume_queued",
+                        json.dumps({"mission_id": mission_id, "reason": reason, "approved": task_id in approved}),
+                        now,
+                    ),
+                )
+                queued.append(task_id)
+            conn.commit()
+            conn.close()
+        except (sqlite3.Error, ValueError, TypeError) as exc:
+            return {
+                "mission_id": mission_id,
+                "queued": queued,
+                "skipped": skipped + [{"reason": "resume_failed", "error": str(exc)}],
+                "status": mission["status"],
+            }
+
+        self.reconcile(task_db)
+        refreshed = self.get(mission_id) or mission
+        return {
+            "mission_id": mission_id,
+            "queued": queued,
+            "skipped": skipped,
+            "status": refreshed["status"],
+        }
+
     def reconcile(self, task_db: str | Path) -> dict[str, int]:
         """Reconcile durable mission rows with the authoritative task graph."""
         rows = self.db.execute("SELECT * FROM missions ORDER BY updated_at ASC").fetchall()

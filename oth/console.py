@@ -343,6 +343,25 @@ class Handler(BaseHTTPRequestHandler):
             self.json_response(400, {"error": f"invalid json: {exc}"})
             return
 
+        if self.path.startswith("/api/missions/") and self.path.endswith("/resume"):
+            mission_id = self.path.split("/")[3]
+            task_ids = body.get("task_ids")
+            if task_ids is not None and not isinstance(task_ids, list):
+                self.json_response(400, {"error": "task_ids must be a list"})
+                return
+            kernel = OTHKernel(ROOT)
+            try:
+                result = kernel.resume_mission(
+                    mission_id,
+                    task_ids=[str(item) for item in task_ids] if task_ids else None,
+                    approve_external=bool(body.get("approve_external", False)),
+                )
+            finally:
+                kernel.close()
+            status = 200 if result.get("status") != "missing" else 404
+            self.json_response(status, result)
+            return
+
         if self.path == "/api/conversations":
             conversation_id = str(uuid.uuid4())
             title = body.get("title") or "New Mission Chat"

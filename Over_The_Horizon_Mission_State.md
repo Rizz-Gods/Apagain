@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission Recovery Reconciliation
+## Current subsystem: Mission Resume and Retry Control
 
 Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
 
-Previous subsystem: Mission Graph Continuity — complete and live-validated
+Previous subsystem: Mission Recovery Reconciliation — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -74,6 +74,15 @@ Previous subsystem: Mission Graph Continuity — complete and live-validated
   - Stale-task recovery preserves truthful failed/running/queued mission state.
   - Automatic re-execution is intentionally not performed; reconciliation is the safe recovery boundary.
   - Documentation: `docs/MISSION_RECOVERY.md`
+- Mission Resume and Retry Control subsystem:
+  - Failed mission nodes can be explicitly resumed without restarting successful nodes.
+  - Original task IDs and graph positions are preserved.
+  - Lane failure exclusions and retry counters reset for a new recovery cycle.
+  - External/financial failed tasks remain approval-gated unless `approve_external=true` is explicitly supplied.
+  - Every resumed task records a durable `mission.resume_queued` audit event.
+  - Console API: `POST /api/missions/{mission_id}/resume`
+  - CLI: `python -m oth.cli mission status|resume ...`
+  - Documentation: `docs/MISSION_RESUME.md`
 
 ### Verification achieved
 - Focused engineering tests: PASS
@@ -113,6 +122,12 @@ Previous subsystem: Mission Graph Continuity — complete and live-validated
   - A running task was reclaimed as stale.
   - Mission reconciliation changed the mission to `failed` and recovered the stale task as latest task.
   - Validation mission/task rows were removed after the check.
+- Mission Resume and Retry Control verification: PASS
+  - Full OTH test suite passed with exit code 0.
+  - Safe failed-node resume test passed.
+  - External-risk resume remained blocked without explicit approval and queued only after explicit approval.
+  - Live Console HTTP endpoint validation passed against the real OTH databases.
+  - Disposable failed mission was requeued through `POST /api/missions/{mission_id}/resume` and then removed.
 - A real console mission previously exposed a false-positive success bug; this was corrected and committed.
 - Commit pushed:
   - `730720b` — `fix: reject false-positive native engineering success`
@@ -132,10 +147,10 @@ Previous subsystem: Mission Graph Continuity — complete and live-validated
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Mission Recovery Reconciliation is complete and live-validated.
+None. Mission Resume and Retry Control is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, or Mission Recovery Reconciliation unless a regression appears. Continue with the next coherent OTH subsystem using all four as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, or Mission Resume and Retry Control unless a regression appears. Continue with the next coherent OTH subsystem using all five as established infrastructure.
 
 ## Repository
 Primary OTH directory:

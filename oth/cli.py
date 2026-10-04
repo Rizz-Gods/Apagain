@@ -95,6 +95,15 @@ def main(argv=None):
     engineering_sub = engineering.add_subparsers(dest="engineering_cmd", required=True)
     engineering_scorecard = engineering_sub.add_parser("scorecard")
     engineering_scorecard.add_argument("--limit", type=int, default=20)
+
+    mission = sub.add_parser("mission")
+    mission_sub = mission.add_subparsers(dest="mission_cmd", required=True)
+    mission_status = mission_sub.add_parser("status")
+    mission_status.add_argument("mission_id")
+    mission_resume = mission_sub.add_parser("resume")
+    mission_resume.add_argument("mission_id")
+    mission_resume.add_argument("--task-id", action="append")
+    mission_resume.add_argument("--approve-external", action="store_true")
     opp = sub.add_parser("opportunities")
     opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
     opp_list = opp_sub.add_parser("list")
@@ -410,6 +419,25 @@ def main(argv=None):
                             args.limit,
                         )
                     ],
+                    indent=2,
+                ))
+            return
+        if args.cmd == "mission":
+            if args.mission_cmd == "status":
+                mission = kernel.missions.get(args.mission_id)
+                if mission is None:
+                    print(json.dumps({"status": "missing", "mission_id": args.mission_id}))
+                else:
+                    payload = dict(mission)
+                    payload["graph"] = kernel.missions.graph_for_mission(args.mission_id, kernel.db.path)
+                    print(json.dumps(payload, indent=2))
+            else:
+                print(json.dumps(
+                    kernel.resume_mission(
+                        args.mission_id,
+                        task_ids=args.task_id,
+                        approve_external=args.approve_external,
+                    ),
                     indent=2,
                 ))
             return

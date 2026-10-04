@@ -1,3 +1,4 @@
+import json
 import uuid
 from pathlib import Path
 from .db import Database
@@ -743,6 +744,60 @@ class OTHKernel:
         return {"status": effective_status, **lane_output,
                 "error": result.error, "spawned": spawned,
                 "retryable": result.retryable}
+
+    def resume_mission(
+        self,
+        mission_id: str,
+        task_ids: list[str] | None = None,
+        approve_external: bool = False,
+    ) -> dict:
+        mission = self.missions.get(mission_id)
+        if mission is None:
+            return {"status": "missing", "mission_id": mission_id}
+        graph = self.missions.graph_for_mission(mission_id, self.db.path)
+        requested = list(task_ids) if task_ids is not None else [
+            str(node["id"]) for node in graph.get("nodes", [])
+            if node.get("status") == "failed"
+        ]
+        approved: set[str] = set()
+        safe: list[str] = []
+        blocked: list[dict] = []
+        risk_order = {"safe": 0, "local_write": 1, "external": 2, "financial": 3}
+
+        for task_id in requested:
+            row = self.db.get_task(task_id)
+            if not row:
+                blocked.append({"task_id": task_id, "reason": "task_missing"})
+                continue
+            payload = json.loads(row["payload"] or "{}")
+            contract = self.workforce.capability_for(row["capability"])
+            payload_risk = str(payload.get("risk", "safe")).lower()
+            effective_risk = max(
+                risk_order.get(payload_risk, 0),
+                risk_order.get(str(contract.risk).lower(), 0),
+            )
+            if effective_risk >= risk_order["external"] and not approve_external:
+                blocked.append({
+                    "task_id": task_id,
+                    "reason": "operator_approval_required",
+                    "risk": "financial" if effective_risk == risk_order["financial"] else "external",
+                })
+                continue
+            safe.append(task_id)
+            if effective_risk >= risk_order["external"]:
+                approved.add(task_id)
+
+        result = self.missions.resume_failed_tasks(
+            mission_id,
+            self.db.path,
+            task_ids=safe,
+            approved_task_ids=approved,
+            reason="operator_resume",
+        )
+        result["blocked"] = blocked
+        result["approve_external"] = bool(approve_external)
+        result["requested"] = requested
+        return result
 
     def approve(self, task_id: str):
         task = self.db.get_task(task_id)

@@ -126,6 +126,20 @@ def test_mission_tracks_spawned_child_tasks(tmp_path):
         assert graph["counts"]["queued"] == 1
         assert len(graph["edges"]) == 1
 
+        kernel.db.update_task(child_id, "failed", "2026-10-05T00:00:00+00:00")
+        missions.update_from_task(
+            "mission-graph",
+            child_id,
+            "failed",
+            {"error": "child transient failure"},
+            task_db=kernel.db.path,
+        )
+
+        resumed = kernel.resume_mission("mission-graph", task_ids=[child_id])
+        assert resumed["queued"] == [child_id]
+        assert kernel.db.get_task(task.id)["status"] == "succeeded"
+        assert kernel.db.get_task(child_id)["status"] == "queued"
+
         second = kernel.dispatch(child_id)
         assert second["status"] == "succeeded"
         final = missions.get("mission-graph")
@@ -173,6 +187,95 @@ def test_mission_reconcile_recovers_after_stale_task_failure(tmp_path):
         assert state["latest_task_id"] == task.id
         assert state["latest_outcome"]["reconciled"] is True
         assert state["latest_outcome"]["graph_status"] == "failed"
+    finally:
+        kernel.close()
+        missions.close()
+
+
+def test_failed_mission_can_resume_without_repeating_successful_work(tmp_path):
+    write_minimal_config(tmp_path)
+    missions = MissionStateStore(tmp_path / "data" / "console.db")
+    kernel = OTHKernel(tmp_path)
+    try:
+        missions.create("conversation-1", "Resume mission", "retry failed node", mission_id="mission-resume")
+        task = kernel.submit(
+            "demo",
+            "echo",
+            {"message": "resume-me", "mission_id": "mission-resume", "max_retries": 0},
+            50,
+        )
+        missions.attach_root_tasks("mission-resume", [task.id])
+        kernel.db.update_task(task.id, "failed", "2026-10-05T00:00:00+00:00")
+        missions.update_from_task(
+            "mission-resume",
+            task.id,
+            "failed",
+            {"error": "transient failure"},
+            task_db=kernel.db.path,
+        )
+
+        resumed = kernel.resume_mission("mission-resume")
+        assert resumed["queued"] == [task.id]
+        assert resumed["blocked"] == []
+        assert resumed["status"] == "queued"
+
+        stored = kernel.db.get_task(task.id)
+        payload = json.loads(stored["payload"])
+        assert stored["status"] == "queued"
+        assert payload["_resume_count"] == 1
+        assert payload["_failed_lane_workers"] == []
+
+        result = kernel.dispatch(task.id)
+        assert result["status"] == "succeeded"
+        assert missions.get("mission-resume")["status"] == "succeeded"
+    finally:
+        kernel.close()
+        missions.close()
+
+
+def test_external_failed_mission_requires_explicit_resume_approval(tmp_path):
+    write_minimal_config(tmp_path)
+    (tmp_path / "config" / "workforce.json").write_text(
+        '{"capabilities":{"social-actions":{"risk":"external"}}}',
+        encoding="utf-8",
+    )
+    missions = MissionStateStore(tmp_path / "data" / "console.db")
+    kernel = OTHKernel(tmp_path)
+    try:
+        assert kernel.workforce.capability_for("social-actions").risk == "external"
+        missions.create("conversation-1", "External resume", "operator gated retry", mission_id="mission-external")
+        task = kernel.submit(
+            "social-actions",
+            "publish_text",
+            {
+                "message": "retry",
+                "mission_id": "mission-external",
+                "max_retries": 0,
+            },
+            50,
+        )
+        missions.attach_root_tasks("mission-external", [task.id])
+        kernel.db.update_task(task.id, "failed", "2026-10-05T00:00:00+00:00")
+        missions.update_from_task(
+            "mission-external",
+            task.id,
+            "failed",
+            {"error": "publish failed"},
+            task_db=kernel.db.path,
+        )
+
+        gated = kernel.resume_mission("mission-external")
+        assert gated["queued"] == []
+        assert gated["blocked"][0]["reason"] == "operator_approval_required"
+        assert kernel.db.get_task(task.id)["status"] == "failed"
+
+        approved = kernel.resume_mission("mission-external", approve_external=True)
+        assert approved["queued"] == [task.id]
+        stored = kernel.db.get_task(task.id)
+        payload = json.loads(stored["payload"])
+        assert stored["status"] == "queued"
+        assert payload["approved"] is True
+        assert payload["approved_by"] == "operator"
     finally:
         kernel.close()
         missions.close()
