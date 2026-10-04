@@ -28,7 +28,7 @@ def test_engineering_worker_runs_verification(monkeypatch, tmp_path):
 
     calls = []
 
-    def fake_run(command, timeout):
+    def fake_run(command, timeout, env=None):
         calls.append(command)
         if command[:2] == ["git", "status"]:
             return CompletedProcess(command, 0, "", "")

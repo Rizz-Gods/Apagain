@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -23,7 +25,12 @@ class EngineeringWorker:
     def _opencode(self) -> str | None:
         return shutil.which("opencode") or shutil.which("opencode.cmd")
 
-    def _run(self, command: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+    def _run(
+        self,
+        command: list[str],
+        timeout: int,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             command,
             cwd=self.root,
@@ -31,7 +38,27 @@ class EngineeringWorker:
             text=True,
             timeout=timeout,
             check=False,
+            env=env,
         )
+
+    def _ollama_base_url(self) -> str:
+        try:
+            proc = subprocess.run(
+                [
+                    "wsl.exe", "-d", "Arch", "--", "bash", "-lc",
+                    "ip -4 -o addr show eth0 | awk '{print $4}' | cut -d/ -f1",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            ip = next((line.strip() for line in proc.stdout.splitlines() if re.fullmatch(r"\d+(?:\.\d+){3}", line.strip())), "")
+            if ip:
+                return f"http://{ip}:11434/v1"
+        except Exception:
+            pass
+        return os.getenv("OTH_OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
 
     def _test_command(self) -> list[str] | None:
         python = self.root / ".venv" / "Scripts" / "python.exe"
@@ -90,6 +117,13 @@ class EngineeringWorker:
         attempts = 0
         final_agent_output = ""
 
+        environment = os.environ.copy()
+        environment["OTH_OLLAMA_BASE_URL"] = self._ollama_base_url()
+        environment["OTH_OPENCODE_MODEL"] = os.getenv(
+            "OTH_OPENCODE_MODEL",
+            "ollama/qwen2.5-coder:0.5b-instruct-q5_1",
+        )
+
         for cycle in range(self.repair_cycles + 1):
             attempts += 1
             prompt = self._prompt(task, failures[-1] if failures else "")
@@ -109,6 +143,7 @@ class EngineeringWorker:
                         prompt,
                     ],
                     self.timeout_seconds,
+                    env=environment,
                 )
             except subprocess.TimeoutExpired as exc:
                 failures.append(f"opencode timeout after {self.timeout_seconds}s: {exc}")
