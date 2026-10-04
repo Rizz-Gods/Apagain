@@ -86,3 +86,52 @@ def test_pilot_metadata_reaches_task_payload(tmp_path):
         assert payload["conversation_id"] == "conversation-1"
     finally:
         kernel.close()
+
+
+
+def test_mission_tracks_spawned_child_tasks(tmp_path):
+    write_minimal_config(tmp_path)
+    missions = MissionStateStore(tmp_path / "data" / "console.db")
+    kernel = OTHKernel(tmp_path)
+    try:
+        missions.create("conversation-1", "Multi-stage mission", "echo -> verify", mission_id="mission-graph")
+        task = kernel.submit(
+            "demo",
+            "echo",
+            {
+                "message": "stage-1",
+                "mission_id": "mission-graph",
+                "conversation_id": "conversation-1",
+                "max_retries": 0,
+                "next": [{"capability": "demo", "action": "echo", "payload": {"message": "stage-2"}}],
+            },
+            50,
+        )
+        missions.attach_root_tasks("mission-graph", [task.id])
+
+        first = kernel.dispatch(task.id)
+        assert first["status"] == "succeeded"
+        assert len(first["spawned"]) == 1
+
+        child_id = first["spawned"][0]
+        child = kernel.db.get_task(child_id)
+        child_payload = json.loads(child["payload"])
+        assert child_payload["mission_id"] == "mission-graph"
+        assert child_payload["conversation_id"] == "conversation-1"
+
+        mid = missions.get("mission-graph")
+        assert mid["status"] == "queued"
+        graph = missions.graph_for_mission("mission-graph", tmp_path / "data" / "oth.db")
+        assert graph["counts"]["total"] == 2
+        assert graph["counts"]["queued"] == 1
+        assert len(graph["edges"]) == 1
+
+        second = kernel.dispatch(child_id)
+        assert second["status"] == "succeeded"
+        final = missions.get("mission-graph")
+        assert final["status"] == "succeeded"
+        assert final["latest_task_id"] == child_id
+        assert final["latest_outcome"]["spawned_tasks"] == []
+    finally:
+        kernel.close()
+        missions.close()

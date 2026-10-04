@@ -131,7 +131,7 @@ class MissionStateStore:
         root_ids = list(mission["root_task_ids"])
         aggregate = str(status)
         if task_db and root_ids:
-            aggregate = self._aggregate_root_status(root_ids, str(task_db), fallback=aggregate)
+            aggregate = self._aggregate_task_graph(root_ids, str(task_db), fallback=aggregate)
 
         now = now_iso()
         completed_at = mission["completed_at"]
@@ -159,6 +159,64 @@ class MissionStateStore:
         self.db.commit()
         return self.get(mission_id)
 
+    def graph_for_mission(self, mission_id: str, task_db: str | Path) -> dict[str, Any]:
+        mission = self.get(mission_id)
+        if mission is None:
+            return {"mission_id": mission_id, "roots": [], "nodes": [], "edges": [], "counts": {"total": 0}}
+        path = Path(task_db)
+        if not path.exists():
+            return {"mission_id": mission_id, "roots": mission["root_task_ids"], "nodes": [], "edges": [], "counts": {"total": 0}}
+        try:
+            conn = sqlite3.connect(path)
+            conn.row_factory = sqlite3.Row
+            roots = list(mission["root_task_ids"])
+            queue = [(root, 0) for root in roots]
+            seen: set[str] = set(roots)
+            nodes: dict[str, dict[str, Any]] = {}
+            edges: list[dict[str, Any]] = []
+            while queue and len(nodes) < 512:
+                current, level = queue.pop(0)
+                row = conn.execute(
+                    "SELECT id, capability, action, status, priority, created_at, updated_at FROM tasks WHERE id=?",
+                    (current,),
+                ).fetchone()
+                if row:
+                    nodes[current] = {**dict(row), "level": level}
+                children = conn.execute(
+                    "SELECT child_task_id, edge_type FROM task_edges WHERE parent_task_id=?",
+                    (current,),
+                ).fetchall()
+                for child in children:
+                    child_id = str(child["child_task_id"])
+                    edges.append({
+                        "parent_task_id": current,
+                        "child_task_id": child_id,
+                        "edge_type": child["edge_type"],
+                    })
+                    if child_id not in seen:
+                        seen.add(child_id)
+                        queue.append((child_id, level + 1))
+            conn.close()
+        except sqlite3.Error:
+            return {"mission_id": mission_id, "roots": mission["root_task_ids"], "nodes": [], "edges": [], "counts": {"total": 0}}
+
+        statuses = [str(node["status"]) for node in nodes.values()]
+        counts = {
+            "total": len(nodes),
+            "queued": statuses.count("queued"),
+            "running": statuses.count("running"),
+            "blocked": statuses.count("blocked"),
+            "succeeded": statuses.count("succeeded"),
+            "failed": statuses.count("failed"),
+        }
+        return {
+            "mission_id": mission_id,
+            "roots": roots,
+            "nodes": list(nodes.values()),
+            "edges": edges,
+            "counts": counts,
+        }
+
     def context_for_conversation(self, conversation_id: str, limit: int = 6) -> str:
         missions = self.for_conversation(conversation_id, limit)
         if not missions:
@@ -176,6 +234,7 @@ class MissionStateStore:
                     f"  Status: {mission['status']}",
                     f"  Root tasks: {', '.join(mission['root_task_ids']) or 'none'}",
                     f"  Latest task: {mission['latest_task_id'] or 'none'}",
+                    f"  Task graph: {self._graph_summary(mission['root_task_ids'])}",
                     f"  Outcome: {outcome_summary or 'none'}",
                 ]
             )
@@ -197,8 +256,13 @@ class MissionStateStore:
             "completed_at": row["completed_at"],
         }
 
+    def _graph_summary(self, root_ids: list[str]) -> str:
+        # Context rendering is intentionally lightweight; detailed graph state is
+        # available through the mission API and task graph endpoint.
+        return f"{len(root_ids)} root task(s) tracked"
+
     @staticmethod
-    def _aggregate_root_status(
+    def _aggregate_task_graph(
         root_ids: list[str],
         task_db: str,
         fallback: str,
@@ -208,16 +272,35 @@ class MissionStateStore:
             return fallback
         try:
             conn = sqlite3.connect(path)
+            conn.row_factory = sqlite3.Row
+            queue = list(root_ids)
+            seen = set(root_ids)
+            task_ids = []
+            while queue:
+                current = queue.pop(0)
+                task_ids.append(current)
+                children = conn.execute(
+                    "SELECT child_task_id FROM task_edges WHERE parent_task_id=?",
+                    (current,),
+                ).fetchall()
+                for child in children:
+                    child_id = str(child[0])
+                    if child_id not in seen:
+                        seen.add(child_id)
+                        queue.append(child_id)
+            if not task_ids:
+                conn.close()
+                return fallback
             rows = conn.execute(
                 "SELECT id,status FROM tasks WHERE id IN (%s)"
-                % ",".join("?" for _ in root_ids),
-                tuple(root_ids),
+                % ",".join("?" for _ in task_ids),
+                tuple(task_ids),
             ).fetchall()
             conn.close()
         except sqlite3.Error:
             return fallback
 
-        observed = {str(row[1]) for row in rows}
+        observed = {str(row["status"]) for row in rows}
         if not observed:
             return fallback
         if "running" in observed:
@@ -226,8 +309,8 @@ class MissionStateStore:
             return "queued"
         if "blocked" in observed:
             return "blocked"
-        if observed and observed.issubset({"succeeded"}):
-            return "succeeded"
         if "failed" in observed:
             return "failed"
+        if observed and observed.issubset({"succeeded"}):
+            return "succeeded"
         return fallback

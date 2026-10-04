@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission Continuity
+## Current subsystem: Mission Graph Continuity
 
 Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
 
-Previous subsystem: Engineering Execution Reliability — complete and live-validated
+Previous subsystem: Mission Continuity — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -60,6 +60,13 @@ Previous subsystem: Engineering Execution Reliability — complete and live-vali
 - Mission Continuity tests:
   - `tests/test_mission_continuity.py`
   - `tests/test_mission_kernel_bridge.py`
+- Mission Graph Continuity subsystem:
+  - Child handoffs inherit mission and conversation identity.
+  - Event-triggered child tasks inherit the same mission identity.
+  - Mission status aggregates roots and all reachable descendant tasks.
+  - Mission state is refreshed after child spawning so queued descendants cannot be missed.
+  - Console mission API now exposes graph nodes, edges, and status counts.
+  - Documentation: `docs/MISSION_GRAPH_CONTINUITY.md`
 
 ### Verification achieved
 - Focused engineering tests: PASS
@@ -86,6 +93,13 @@ Previous subsystem: Engineering Execution Reliability — complete and live-vali
   - Implementation evidence observed: `true`
   - Full pytest verification: passed
   - Mission quality: `1.0`
+- Live Mission Graph Continuity validation: PASS
+  - Real OTH `data/oth.db` and `data/console.db` exercised.
+  - Root succeeded and spawned a queued child.
+  - Mission remained `queued` until the child completed.
+  - Graph reported 2 tasks, 1 queued descendant, and 1 edge.
+  - Child inherited mission/conversation identity.
+  - Child then succeeded and mission closed `succeeded` with child as latest task.
 - A real console mission previously exposed a false-positive success bug; this was corrected and committed.
 - Commit pushed:
   - `730720b` — `fix: reject false-positive native engineering success`
@@ -105,10 +119,10 @@ Previous subsystem: Engineering Execution Reliability — complete and live-vali
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Mission Continuity is complete and live-validated.
+None. Mission Graph Continuity is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability or Mission Continuity unless a regression appears. Continue with the next coherent OTH subsystem using both as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, or Mission Graph Continuity unless a regression appears. Continue with the next coherent OTH subsystem using all three as established infrastructure.
 
 ## Repository
 Primary OTH directory:

@@ -48,6 +48,9 @@ class EventTriggerEngine:
             }
         elif source == "event":
             payload["input"] = {"task": task, "output": output}
+        for continuity_key in ("mission_id", "conversation_id"):
+            if task.get(continuity_key) and not payload.get(continuity_key):
+                payload[continuity_key] = task[continuity_key]
         return payload
 
     def fire(self, kernel, event_kind: str, task: dict[str, Any], output: dict[str, Any]) -> list[str]:

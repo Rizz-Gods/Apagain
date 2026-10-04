@@ -231,7 +231,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/conversations/") and self.path.endswith("/mission"):
             conversation_id = self.path.split("/")[3]
-            self.json_response(200, {"items": STORE.missions.for_conversation(conversation_id)})
+            missions = STORE.missions.for_conversation(conversation_id)
+            task_db = ROOT / "data" / "oth.db"
+            payload = [
+                {**mission, "graph": STORE.missions.graph_for_mission(mission["id"], task_db)}
+                for mission in missions
+            ]
+            self.json_response(200, {"items": payload})
             return
         if self.path.startswith("/api/conversations/") and self.path.endswith("/messages"):
             conversation_id = self.path.split("/")[3]

@@ -663,29 +663,6 @@ class OTHKernel:
             now_iso(),
         )
         mission_id = str(stored_payload.get("mission_id") or "").strip()
-        if mission_id:
-            verification = lane_output.get("verification")
-            verification_passed = None
-            if isinstance(verification, dict):
-                if "passed" in verification:
-                    verification_passed = bool(verification["passed"])
-                elif "returncode" in verification:
-                    verification_passed = int(verification["returncode"]) == 0
-            self.missions.update_from_task(
-                mission_id,
-                task_id,
-                effective_status,
-                {
-                    "summary": lane_output.get("summary"),
-                    "provider": lane_output.get("provider"),
-                    "model": lane_output.get("model"),
-                    "error": result.error,
-                    "quality": evaluation.quality,
-                    "implementation_changed": lane_output.get("implementation_changed"),
-                    "verification_passed": verification_passed,
-                },
-                task_db=self.db.path,
-            )
         spawned = []
         if result.success:
             handoffs = task_payload.get("next") or result.output.get("next") or []
@@ -703,6 +680,9 @@ class OTHKernel:
                     }
                 elif "input" not in child_payload:
                     child_payload["input"] = result.output
+                for continuity_key in ("mission_id", "conversation_id"):
+                    if task_payload.get(continuity_key) and not child_payload.get(continuity_key):
+                        child_payload[continuity_key] = task_payload[continuity_key]
                 child = self.submit(
                     spec["capability"],
                     spec["action"],
@@ -730,10 +710,36 @@ class OTHKernel:
             "capability": row["capability"],
             "action": row["action"],
             "status": effective_status,
+            "mission_id": task_payload.get("mission_id"),
+            "conversation_id": task_payload.get("conversation_id"),
         }
         spawned.extend(
             self.trigger_engine.fire(self, f"task.{effective_status}", trigger_task, result.output)
         )
+        if mission_id:
+            verification = lane_output.get("verification")
+            verification_passed = None
+            if isinstance(verification, dict):
+                if "passed" in verification:
+                    verification_passed = bool(verification["passed"])
+                elif "returncode" in verification:
+                    verification_passed = int(verification["returncode"]) == 0
+            self.missions.update_from_task(
+                mission_id,
+                task_id,
+                effective_status,
+                {
+                    "summary": lane_output.get("summary"),
+                    "provider": lane_output.get("provider"),
+                    "model": lane_output.get("model"),
+                    "error": result.error,
+                    "quality": evaluation.quality,
+                    "implementation_changed": lane_output.get("implementation_changed"),
+                    "verification_passed": verification_passed,
+                    "spawned_tasks": spawned,
+                },
+                task_db=self.db.path,
+            )
         return {"status": effective_status, **lane_output,
                 "error": result.error, "spawned": spawned,
                 "retryable": result.retryable}
