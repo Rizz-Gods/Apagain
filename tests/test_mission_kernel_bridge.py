@@ -135,3 +135,44 @@ def test_mission_tracks_spawned_child_tasks(tmp_path):
     finally:
         kernel.close()
         missions.close()
+
+
+
+def test_mission_reconcile_recovers_after_stale_task_failure(tmp_path):
+    write_minimal_config(tmp_path)
+    missions = MissionStateStore(tmp_path / "data" / "console.db")
+    kernel = OTHKernel(tmp_path)
+    try:
+        missions.create("conversation-1", "Recover mission", "resume safely", mission_id="mission-recover")
+        task = kernel.submit(
+            "demo",
+            "echo",
+            {"message": "recover-me", "mission_id": "mission-recover", "max_retries": 0},
+            50,
+        )
+        missions.attach_root_tasks("mission-recover", [task.id])
+        kernel.db.update_task(task.id, "running", "2026-10-05T00:00:00+00:00")
+        missions.update_from_task(
+            "mission-recover",
+            task.id,
+            "running",
+            {"summary": "worker lease active"},
+            task_db=kernel.db.path,
+        )
+
+        reclaimed = kernel.db.reclaim_stale_tasks(
+            "2099-01-01T00:00:00+00:00",
+            "2098-01-01T00:00:00+00:00",
+        )
+        assert reclaimed == 1
+
+        result = missions.reconcile(kernel.db.path)
+        state = missions.get("mission-recover")
+        assert result["changed"] == 1
+        assert state["status"] == "failed"
+        assert state["latest_task_id"] == task.id
+        assert state["latest_outcome"]["reconciled"] is True
+        assert state["latest_outcome"]["graph_status"] == "failed"
+    finally:
+        kernel.close()
+        missions.close()

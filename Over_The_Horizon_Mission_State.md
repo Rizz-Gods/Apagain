@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission Graph Continuity
+## Current subsystem: Mission Recovery Reconciliation
 
 Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
 
-Previous subsystem: Mission Continuity — complete and live-validated
+Previous subsystem: Mission Graph Continuity — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -67,6 +67,13 @@ Previous subsystem: Mission Continuity — complete and live-validated
   - Mission state is refreshed after child spawning so queued descendants cannot be missed.
   - Console mission API now exposes graph nodes, edges, and status counts.
   - Documentation: `docs/MISSION_GRAPH_CONTINUITY.md`
+- Mission Recovery Reconciliation subsystem:
+  - Durable mission rows reconcile from the authoritative task graph.
+  - Daemon runner reconciles missions immediately after stale-task reclamation.
+  - Console mission reads reconcile before returning state.
+  - Stale-task recovery preserves truthful failed/running/queued mission state.
+  - Automatic re-execution is intentionally not performed; reconciliation is the safe recovery boundary.
+  - Documentation: `docs/MISSION_RECOVERY.md`
 
 ### Verification achieved
 - Focused engineering tests: PASS
@@ -100,6 +107,12 @@ Previous subsystem: Mission Continuity — complete and live-validated
   - Graph reported 2 tasks, 1 queued descendant, and 1 edge.
   - Child inherited mission/conversation identity.
   - Child then succeeded and mission closed `succeeded` with child as latest task.
+- Mission Recovery Reconciliation verification: PASS
+  - Full OTH test suite passed with exit code 0.
+  - Real OTH databases exercised in a transient lease-expiry validation.
+  - A running task was reclaimed as stale.
+  - Mission reconciliation changed the mission to `failed` and recovered the stale task as latest task.
+  - Validation mission/task rows were removed after the check.
 - A real console mission previously exposed a false-positive success bug; this was corrected and committed.
 - Commit pushed:
   - `730720b` — `fix: reject false-positive native engineering success`
@@ -119,10 +132,10 @@ Previous subsystem: Mission Continuity — complete and live-validated
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Mission Graph Continuity is complete and live-validated.
+None. Mission Recovery Reconciliation is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, or Mission Graph Continuity unless a regression appears. Continue with the next coherent OTH subsystem using all three as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, or Mission Recovery Reconciliation unless a regression appears. Continue with the next coherent OTH subsystem using all four as established infrastructure.
 
 ## Repository
 Primary OTH directory:

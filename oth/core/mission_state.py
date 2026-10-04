@@ -159,6 +159,44 @@ class MissionStateStore:
         self.db.commit()
         return self.get(mission_id)
 
+    def reconcile(self, task_db: str | Path) -> dict[str, int]:
+        """Reconcile durable mission rows with the authoritative task graph."""
+        rows = self.db.execute("SELECT * FROM missions ORDER BY updated_at ASC").fetchall()
+        checked = 0
+        changed = 0
+        for row in rows:
+            mission = self._row(row)
+            roots = mission["root_task_ids"]
+            if not roots:
+                continue
+            checked += 1
+            aggregate = self._aggregate_task_graph(roots, str(task_db), fallback=mission["status"])
+            graph = self.graph_for_mission(mission["id"], task_db)
+            nodes = graph.get("nodes", [])
+            latest = max(nodes, key=lambda node: str(node.get("updated_at", "")), default=None)
+            latest_task_id = (latest or {}).get("id") or mission["latest_task_id"]
+            should_complete = aggregate in TERMINAL
+            completed_at = mission["completed_at"] if should_complete else None
+            if aggregate == mission["status"] and completed_at == mission["completed_at"] and latest_task_id == mission["latest_task_id"]:
+                continue
+            outcome = dict(mission["latest_outcome"] or {})
+            outcome["reconciled"] = True
+            outcome["graph_status"] = aggregate
+            self.db.execute(
+                "UPDATE missions SET status=?, latest_task_id=?, latest_outcome=?, updated_at=?, completed_at=? WHERE id=?",
+                (
+                    aggregate,
+                    latest_task_id,
+                    json.dumps(outcome, ensure_ascii=False),
+                    now_iso(),
+                    completed_at,
+                    mission["id"],
+                ),
+            )
+            changed += 1
+        self.db.commit()
+        return {"checked": checked, "changed": changed}
+
     def graph_for_mission(self, mission_id: str, task_db: str | Path) -> dict[str, Any]:
         mission = self.get(mission_id)
         if mission is None:

@@ -28,6 +28,7 @@ class OTHRunner:
             now.isoformat(),
             (now - timedelta(seconds=600)).isoformat(),
         )
+        self.kernel.missions.reconcile(self.kernel.db.path)
         self.scheduler.tick(self.kernel)
         queued = [t for t in self.kernel.tasks() if t["status"] == "queued"]
         if not queued:

@@ -231,6 +231,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/conversations/") and self.path.endswith("/mission"):
             conversation_id = self.path.split("/")[3]
+            STORE.missions.reconcile(ROOT / "data" / "oth.db")
             missions = STORE.missions.for_conversation(conversation_id)
             task_db = ROOT / "data" / "oth.db"
             payload = [
