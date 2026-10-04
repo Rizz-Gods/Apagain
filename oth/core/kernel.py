@@ -9,13 +9,16 @@ from .triggers import EventTriggerEngine
 from .lanes import LaneRouter
 from .evaluator import ExecutionEvaluator
 from .analyst import OpportunityAnalyst
+from .opportunity_fallback import OpportunityAnalystFallback
 from .automation_builder import AutomationBuilder
 from .automation_designer import AutomationDesigner
+from .automation_design_fallback import AutomationDesignerFallback
 from .dependency_provisioner import DependencyProvisioner
 from .promotion_gate import PromotionGate
 from .workflow_compiler import WorkflowCompiler
 from .qa_validator import QAValidator
 from .review_miner import ReviewMiner
+from .review_miner_fallback import ReviewMinerFallback
 from .skills import SkillAcquirer
 from .tools import ToolRegistry
 from oth.workers.browser import BrowserWorker
@@ -76,12 +79,21 @@ class OTHKernel:
             elif mode == "analysis":
                 self.workers.append(OpportunityAnalyst())
                 modes.add("analysis")
+            elif mode == "analysis-fallback":
+                self.workers.append(OpportunityAnalystFallback())
+                modes.add("analysis-fallback")
             elif mode == "review-mining":
                 self.workers.append(ReviewMiner(agent))
                 modes.add("review-mining")
+            elif mode == "review-mining-fallback":
+                self.workers.append(ReviewMinerFallback())
+                modes.add("review-mining-fallback")
             elif mode == "automation-design":
                 self.workers.append(AutomationDesigner())
                 modes.add("automation-design")
+            elif mode == "automation-design-fallback":
+                self.workers.append(AutomationDesignerFallback())
+                modes.add("automation-design-fallback")
             elif mode == "automation-build":
                 self.workers.append(AutomationBuilder(self.root))
                 modes.add("automation-build")
@@ -559,9 +571,19 @@ class OTHKernel:
                     int(spec.get("priority", 50)),
                 )
                 spawned.append(child.id)
+                self.db.add_task_edge(
+                    task_id,
+                    child.id,
+                    str(spec.get("edge_type", "handoff")),
+                    now_iso(),
+                )
                 self.db.add_event(
                     task_id, "task.spawned",
-                    {"child_task_id": child.id, "capability": child.capability},
+                    {
+                        "child_task_id": child.id,
+                        "capability": child.capability,
+                        "edge_type": str(spec.get("edge_type", "handoff")),
+                    },
                     now_iso(),
                 )
         trigger_task = {

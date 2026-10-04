@@ -75,6 +75,38 @@ class LaneTests(unittest.TestCase):
             self.assertEqual(sum(1 for x in kinds if x == "lane.switched"), 3)
             kernel.close()
 
+    def test_circuit_breaker_skips_repeatedly_failed_worker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            kernel = self._kernel(root)
+            ids = ["lane-a", "lane-b"]
+            kernel.workforce.workers = {
+                worker_id: {
+                    "id": worker_id,
+                    "name": worker_id,
+                    "capabilities": ["lane-demo"],
+                    "status": "available",
+                    "metadata": {"priority": 100 - index},
+                }
+                for index, worker_id in enumerate(ids)
+            }
+            first = LaneWorker("lane-a", fail=False)
+            second = LaneWorker("lane-b", fail=False)
+            kernel.workers = [first, second]
+
+            for n in range(3):
+                kernel.db.add_event(
+                    f"historical-{n}",
+                    "lane.1.failed",
+                    {"worker_id": "lane-a", "lane": 1, "capability": "lane-demo"},
+                    f"2026-10-04T00:0{n}:00Z",
+                )
+
+            self.assertTrue(kernel.db.worker_circuit_state("lane-a")["open"])
+            candidates = kernel.lanes.candidates(kernel, "lane-demo", "run")
+            self.assertEqual([c.worker_id for c in candidates], ["lane-b"])
+            kernel.close()
+
     def test_failed_worker_is_quarantined_for_next_cycle(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -2,95 +2,279 @@
   "defaults": {
     "department": "ops",
     "objective": "Execute assigned OTH work safely and return structured results.",
-    "permissions": ["read", "local_execute"],
+    "permissions": [
+      "read",
+      "local_execute"
+    ],
     "memory_scope": "task",
     "retry": {
       "max_attempts": 1,
       "retryable": true
     },
     "escalation": {
-      "on": ["approval_required", "repeated_failure", "no_worker"],
+      "on": [
+        "approval_required",
+        "repeated_failure",
+        "no_worker"
+      ],
       "target": "pilot"
     },
-    "metrics": ["success_rate", "reliability", "latency"]
+    "metrics": [
+      "success_rate",
+      "reliability",
+      "latency"
+    ]
   },
   "capabilities": {
     "reasoning": {
       "department": "research",
       "risk": "safe",
-      "required_permissions": ["read"]
+      "required_permissions": [
+        "read"
+      ]
     },
     "research": {
       "department": "research",
       "risk": "safe",
-      "required_permissions": ["read"]
+      "required_permissions": [
+        "read"
+      ]
     },
     "scout": {
       "department": "research",
       "risk": "safe",
-      "required_permissions": ["browser_read"]
+      "required_permissions": [
+        "browser_read"
+      ]
     },
     "review-mining": {
       "department": "research",
       "risk": "safe",
-      "required_permissions": ["browser_read"]
+      "required_permissions": [
+        "browser_read"
+      ]
     },
     "social-autonomy": {
       "department": "ops",
       "risk": "safe",
-      "required_permissions": ["orchestrate"]
+      "required_permissions": [
+        "orchestrate"
+      ]
     },
     "social-actions": {
       "department": "distribution",
       "risk": "external",
-      "required_permissions": ["external_action"]
+      "required_permissions": [
+        "external_action"
+      ]
     },
     "media-production": {
       "department": "media",
       "risk": "local_write",
-      "required_permissions": ["local_execute"]
+      "required_permissions": [
+        "local_execute"
+      ]
     },
     "resolve-bridge": {
       "department": "media",
       "risk": "local_write",
-      "required_permissions": ["local_execute"]
+      "required_permissions": [
+        "local_execute"
+      ]
     },
     "media-transcription": {
       "department": "media",
       "risk": "local_write",
-      "required_permissions": ["local_execute"]
+      "required_permissions": [
+        "local_execute"
+      ]
     }
   },
   "workers": {
     "hermes": {
       "department": "research",
-      "permissions": ["read", "research"]
+      "permissions": [
+        "read",
+        "research"
+      ],
+      "objective": "Collect and validate decision-relevant evidence with traceable outputs."
     },
     "scout": {
       "department": "research",
-      "permissions": ["read", "browser_read", "research"]
+      "permissions": [
+        "read",
+        "browser_read",
+        "research"
+      ],
+      "objective": "Collect and validate decision-relevant evidence with traceable outputs."
     },
     "review-miner": {
       "department": "research",
-      "permissions": ["read", "browser_read", "research"]
+      "permissions": [
+        "read",
+        "browser_read",
+        "research"
+      ],
+      "objective": "Collect and validate decision-relevant evidence with traceable outputs."
     },
     "scout-http": {
       "department": "research",
-      "permissions": ["read", "browser_read", "research"],
-      "objective": "Provide a browser-independent market evidence lane over direct HTTPS."
+      "permissions": [
+        "read",
+        "browser_read",
+        "research"
+      ],
+      "objective": "Collect and validate decision-relevant evidence with traceable outputs."
     },
     "reasoning-local": {
       "department": "engineering",
-      "permissions": ["read", "local_execute"],
-      "objective": "Keep planning and structured reasoning available when external model execution is unavailable."
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Build, compile, provision, and improve reliable automation infrastructure."
+    },
+    "opportunity-analyst-fallback": {
+      "department": "business",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Score market opportunities independently when the primary analyst is unavailable."
+    },
+    "automation-designer-fallback": {
+      "department": "engineering",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Generate a safe blueprint when the primary automation designer is unavailable."
+    },
+    "review-miner-fallback": {
+      "department": "research",
+      "permissions": [
+        "read",
+        "research"
+      ],
+      "objective": "Mine review and complaint evidence from already-collected research when browser review scraping is unavailable."
     },
     "social-autonomy": {
       "department": "ops",
-      "permissions": ["read", "local_execute", "orchestrate"]
+      "permissions": [
+        "read",
+        "local_execute",
+        "orchestrate"
+      ],
+      "objective": "Coordinate execution, safeguards, health, and operational continuity."
     },
     "social-actions": {
       "department": "distribution",
-      "permissions": ["read", "local_execute", "external_action"]
+      "permissions": [
+        "read",
+        "local_execute",
+        "external_action"
+      ],
+      "objective": "Prepare, schedule, reconcile, and publish approved distribution work within policy."
+    },
+    "browser": {
+      "department": "ops",
+      "objective": "Coordinate execution, safeguards, health, and operational continuity."
+    },
+    "social-market": {
+      "department": "business",
+      "objective": "Turn evidence into qualified opportunities, offers, and executable business decisions."
+    },
+    "social-accounts": {
+      "department": "distribution",
+      "objective": "Prepare, schedule, reconcile, and publish approved distribution work within policy."
+    },
+    "social-optimizer": {
+      "department": "analytics",
+      "objective": "Measure outcomes, detect patterns, and recommend evidence-based optimization."
+    },
+    "social-control": {
+      "department": "ops",
+      "objective": "Coordinate execution, safeguards, health, and operational continuity."
+    },
+    "social-queue": {
+      "department": "distribution",
+      "objective": "Prepare, schedule, reconcile, and publish approved distribution work within policy."
+    },
+    "social-autopilot": {
+      "department": "distribution",
+      "objective": "Prepare, schedule, reconcile, and publish approved distribution work within policy."
+    },
+    "social-leads": {
+      "department": "distribution",
+      "objective": "Prepare, schedule, reconcile, and publish approved distribution work within policy."
+    },
+    "social-content": {
+      "department": "content",
+      "objective": "Turn validated market insight into useful, platform-aware content assets."
+    },
+    "social-planner": {
+      "department": "content",
+      "objective": "Turn validated market insight into useful, platform-aware content assets."
+    },
+    "media-assets": {
+      "department": "media",
+      "objective": "Produce, transform, inspect, and validate media artifacts safely."
+    },
+    "social-editor": {
+      "department": "content",
+      "objective": "Turn validated market insight into useful, platform-aware content assets."
+    },
+    "media-producer": {
+      "department": "media",
+      "objective": "Produce, transform, inspect, and validate media artifacts safely."
+    },
+    "media-ingest": {
+      "department": "media",
+      "objective": "Produce, transform, inspect, and validate media artifacts safely."
+    },
+    "media-qa": {
+      "department": "media",
+      "objective": "Produce, transform, inspect, and validate media artifacts safely."
+    },
+    "media-transcription": {
+      "department": "media",
+      "objective": "Produce, transform, inspect, and validate media artifacts safely."
+    },
+    "resolve-bridge": {
+      "department": "media",
+      "objective": "Produce, transform, inspect, and validate media artifacts safely."
+    },
+    "social-analytics": {
+      "department": "analytics",
+      "objective": "Measure outcomes, detect patterns, and recommend evidence-based optimization."
+    },
+    "opportunity-analyst": {
+      "department": "business",
+      "objective": "Turn evidence into qualified opportunities, offers, and executable business decisions."
+    },
+    "automation-designer": {
+      "department": "engineering",
+      "objective": "Build, compile, provision, and improve reliable automation infrastructure."
+    },
+    "automation-builder": {
+      "department": "engineering",
+      "objective": "Build, compile, provision, and improve reliable automation infrastructure."
+    },
+    "qa-validator": {
+      "department": "ops",
+      "objective": "Coordinate execution, safeguards, health, and operational continuity."
+    },
+    "promotion-gate": {
+      "department": "ops",
+      "objective": "Coordinate execution, safeguards, health, and operational continuity."
+    },
+    "dependency-provisioner": {
+      "department": "engineering",
+      "objective": "Build, compile, provision, and improve reliable automation infrastructure."
+    },
+    "workflow-compiler": {
+      "department": "engineering",
+      "objective": "Build, compile, provision, and improve reliable automation infrastructure."
     }
   }
 }

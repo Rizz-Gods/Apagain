@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS agent_stats (
 CREATE TABLE IF NOT EXISTS trigger_fires (
   fire_key TEXT PRIMARY KEY, fired_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS task_edges (
+  parent_task_id TEXT NOT NULL,
+  child_task_id TEXT NOT NULL UNIQUE,
+  edge_type TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS evaluations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   task_id TEXT NOT NULL,
@@ -303,6 +309,36 @@ class Database:
             (limit,),
         ).fetchall()
 
+    def worker_circuit_state(self, worker_id: str, failure_threshold: int = 3, window: int = 12) -> dict[str, Any]:
+        rows = self.conn.execute(
+            "SELECT kind,payload,created_at FROM events "
+            "WHERE kind LIKE 'lane.%' ORDER BY id DESC LIMIT ?",
+            (window,),
+        ).fetchall()
+        consecutive_failures = 0
+        seen_worker = False
+        last_event = None
+        for row in rows:
+            kind = str(row["kind"])
+            try:
+                payload = json.loads(row["payload"])
+            except (TypeError, ValueError):
+                continue
+            if payload.get("worker_id") != worker_id:
+                continue
+            seen_worker = True
+            last_event = kind
+            if kind.endswith(".failed"):
+                consecutive_failures += 1
+            elif kind.endswith(".succeeded"):
+                break
+        return {
+            "open": consecutive_failures >= max(int(failure_threshold), 1),
+            "consecutive_failures": consecutive_failures,
+            "last_event": last_event,
+            "seen": seen_worker,
+        }
+
     def agent_quality(self, agent_id: str) -> float:
         row = self.conn.execute(
             "SELECT AVG(quality) AS quality FROM evaluations WHERE worker_id=?",
@@ -361,6 +397,63 @@ class Database:
              task.priority, task.status, task.created_at, task.created_at),
         )
         self.conn.commit()
+
+    def add_task_edge(self, parent_task_id: str, child_task_id: str, edge_type: str, created_at: str) -> None:
+        self.conn.execute(
+            "INSERT OR REPLACE INTO task_edges(parent_task_id,child_task_id,edge_type,created_at) VALUES(?,?,?,?)",
+            (parent_task_id, child_task_id, edge_type, created_at),
+        )
+        self.conn.commit()
+
+    def task_children(self, parent_task_id: str):
+        return self.conn.execute(
+            "SELECT e.*, t.capability, t.action, t.status, t.priority "
+            "FROM task_edges e JOIN tasks t ON t.id=e.child_task_id "
+            "WHERE e.parent_task_id=? ORDER BY t.priority DESC, t.created_at ASC",
+            (parent_task_id,),
+        ).fetchall()
+
+    def task_parent(self, child_task_id: str):
+        return self.conn.execute(
+            "SELECT e.*, t.capability, t.action, t.status, t.priority "
+            "FROM task_edges e JOIN tasks t ON t.id=e.parent_task_id "
+            "WHERE e.child_task_id=?",
+            (child_task_id,),
+        ).fetchone()
+
+    def task_graph(self, task_id: str, depth: int = 8) -> dict[str, Any]:
+        root = self.get_task(task_id)
+        if root is None:
+            return {"root": None, "nodes": [], "edges": []}
+        nodes = {}
+        edges = []
+        frontier = [root["id"]]
+        levels = {root["id"]: 0}
+        while frontier:
+            current = frontier.pop(0)
+            level = levels[current]
+            row = self.get_task(current)
+            if row is not None:
+                nodes[current] = {
+                    "id": row["id"],
+                    "capability": row["capability"],
+                    "action": row["action"],
+                    "status": row["status"],
+                    "priority": row["priority"],
+                    "level": level,
+                }
+            if level >= depth:
+                continue
+            for child in self.task_children(current):
+                edges.append({
+                    "parent_task_id": current,
+                    "child_task_id": child["child_task_id"],
+                    "edge_type": child["edge_type"],
+                })
+                if child["child_task_id"] not in levels:
+                    levels[child["child_task_id"]] = level + 1
+                    frontier.append(child["child_task_id"])
+        return {"root": task_id, "nodes": list(nodes.values()), "edges": edges}
 
     def update_task(self, task_id: str, status: str, updated_at: str):
         self.conn.execute(

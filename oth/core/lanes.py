@@ -37,6 +37,16 @@ class LaneRouter:
     def max_lanes(self) -> int:
         return max(1, min(int(self.config.get("max_lanes", 4)), 4))
 
+    @property
+    def circuit_failure_threshold(self) -> int:
+        cfg = self.config.get("circuit_breaker", {}) or {}
+        return max(1, int(cfg.get("failure_threshold", 3)))
+
+    @property
+    def circuit_window(self) -> int:
+        cfg = self.config.get("circuit_breaker", {}) or {}
+        return max(1, int(cfg.get("window", 12)))
+
     def candidates(
         self,
         kernel,
@@ -69,13 +79,25 @@ class LaneRouter:
                 health = kernel.db.agent_health(worker_id)
                 reliability = float(health.get("reliability", 1.0))
                 quality = float(health.get("quality", 1.0))
-                return priority_value + reliability * 10.0 + quality * 5.0, priority_value
+                return (
+                    priority_value
+                    + reliability * 10.0
+                    + quality * 5.0,
+                    priority_value,
+                )
 
             for worker in sorted(runtime_workers, key=priority, reverse=True):
                 worker_id = getattr(worker, "id", "builtin")
                 if worker_id in seen:
                     continue
                 if not include_excluded and worker_id in excluded_workers:
+                    continue
+                circuit = kernel.db.worker_circuit_state(
+                    worker_id,
+                    self.circuit_failure_threshold,
+                    self.circuit_window,
+                )
+                if circuit["open"] and not include_excluded:
                     continue
                 try:
                     if not worker.supports(target_capability):

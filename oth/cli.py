@@ -69,6 +69,10 @@ def main(argv=None):
 
     sub.add_parser("tasks")
 
+    graph = sub.add_parser("graph")
+    graph.add_argument("task_id")
+    graph.add_argument("--depth", type=int, default=8)
+
     skill = sub.add_parser("skill")
     skill_sub = skill.add_subparsers(dest="skill_cmd", required=True)
     acquire = skill_sub.add_parser("acquire")
@@ -86,6 +90,7 @@ def main(argv=None):
     sub.add_parser("tools")
     sub.add_parser("agents")
     sub.add_parser("workforce")
+    sub.add_parser("coverage")
     opp = sub.add_parser("opportunities")
     opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
     opp_list = opp_sub.add_parser("list")
@@ -360,6 +365,12 @@ def main(argv=None):
                     print("OTH daemon online")
                     runner.run_forever()
             return
+        if args.cmd == "graph":
+            print(json.dumps(
+                kernel.db.task_graph(args.task_id, max(1, min(args.depth, 32))),
+                indent=2,
+            ))
+            return
         if args.cmd == "tools":
             for tool in kernel.tools.discover():
                 print(tool)
@@ -376,6 +387,9 @@ def main(argv=None):
             return
         if args.cmd == "workforce":
             print(json.dumps(kernel.workforce.status(kernel.db), indent=2))
+            return
+        if args.cmd == "coverage":
+            print(json.dumps(kernel.workforce.coverage(kernel.db), indent=2))
             return
         if args.cmd == "opportunities":
             rows = (kernel.db.top_opportunities(args.limit)

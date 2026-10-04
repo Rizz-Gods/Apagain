@@ -21,9 +21,39 @@
       }
     },
     {
+      "id": "review-miner-fallback",
+      "name": "Review Miner Fallback",
+      "capabilities": ["review-mining"],
+      "status": "available",
+      "metadata": {
+        "mode": "review-mining-fallback",
+        "priority": 30
+      }
+    },
+    {
+      "id": "automation-designer-fallback",
+      "name": "Automation Designer Fallback",
+      "capabilities": ["automation-design"],
+      "status": "available",
+      "metadata": {
+        "mode": "automation-design-fallback",
+        "priority": 35
+      }
+    },
+    {
+      "id": "opportunity-analyst-fallback",
+      "name": "Opportunity Analyst Fallback",
+      "capabilities": ["opportunity-analysis"],
+      "status": "available",
+      "metadata": {
+        "mode": "analysis-fallback",
+        "priority": 35
+      }
+    },
+    {
       "id": "scout-http",
       "name": "HTTP Market Scout",
-      "capabilities": ["scout"],
+      "capabilities": ["scout", "research"],
       "status": "available",
       "metadata": {
         "mode": "scout-http",

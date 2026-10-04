@@ -190,10 +190,57 @@ class WorkforceRegistry:
         candidates.sort(key=score, reverse=True)
         return candidates
 
+    def coverage(self, db=None) -> dict[str, Any]:
+        lane_config = {}
+        lanes_path = self.root / "config" / "lanes.json"
+        if lanes_path.exists():
+            try:
+                lane_config = json.loads(lanes_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                lane_config = {}
+        fallbacks = lane_config.get("fallbacks", {}) or {}
+        report = []
+        for capability, worker_ids in self._capability_index().items():
+            active = []
+            for worker_id in worker_ids:
+                view = next((v for v in self.list_workers(db) if v.worker_id == worker_id), None)
+                if view and view.status in {"available", "online", "ready"}:
+                    active.append(worker_id)
+            fallback_count = len(fallbacks.get(capability, []) or [])
+            resilient = len(active) >= 2 or fallback_count > 0
+            report.append({
+                "capability": capability,
+                "workers": worker_ids,
+                "active_workers": active,
+                "worker_count": len(active),
+                "configured_fallbacks": fallback_count,
+                "resilient": resilient,
+                "single_point_of_failure": not resilient,
+            })
+        report.sort(key=lambda item: (item["resilient"], item["capability"]))
+        return {
+            "capabilities": report,
+            "single_point_count": sum(1 for item in report if item["single_point_of_failure"]),
+            "covered_count": sum(1 for item in report if item["resilient"]),
+            "total_capabilities": len(report),
+        }
+
+    def _capability_index(self) -> dict[str, list[str]]:
+        index: dict[str, list[str]] = {}
+        for view in self.list_workers():
+            for capability in view.capabilities:
+                index.setdefault(capability, []).append(view.worker_id)
+        return index
+
     def status(self, db=None) -> dict[str, Any]:
         workers = []
         for view in self.list_workers(db):
             health = db.agent_health(view.worker_id) if db is not None else {}
+            circuit = (
+                db.worker_circuit_state(view.worker_id)
+                if db is not None
+                else {"open": False, "consecutive_failures": 0, "last_event": None, "seen": False}
+            )
             workers.append({
                 "id": view.worker_id,
                 "name": view.name,
@@ -201,7 +248,10 @@ class WorkforceRegistry:
                 "status": view.status,
                 "capabilities": list(view.capabilities),
                 "permissions": list(view.contract.permissions),
-                "health": health,
+                "health": {
+                    **health,
+                    "circuit": circuit,
+                },
             })
         capabilities = {}
         for worker in workers:

@@ -1,4 +1,21 @@
 {
   "max_lanes": 4,
-  "fallbacks": {}
+  "circuit_breaker": {
+    "failure_threshold": 3,
+    "window": 12
+  },
+  "fallbacks": {
+    "research": [
+      {
+        "capability": "research",
+        "action": "prompt"
+      }
+    ],
+    "reasoning": [
+      {
+        "capability": "reasoning",
+        "action": "prompt"
+      }
+    ]
+  }
 }

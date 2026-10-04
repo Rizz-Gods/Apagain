@@ -67,6 +67,14 @@ class EventTriggerEngine:
                     int(spec.get("priority", 50)),
                 )
                 spawned.append(child.id)
+                parent_task_id = task.get("id")
+                if parent_task_id:
+                    kernel.db.add_task_edge(
+                        parent_task_id,
+                        child.id,
+                        str(spec.get("edge_type", "trigger")),
+                        now_iso(),
+                    )
                 kernel.db.add_event(
                     task.get("id"),
                     "task.triggered",
@@ -74,6 +82,7 @@ class EventTriggerEngine:
                         "trigger_id": trigger_id,
                         "child_task_id": child.id,
                         "capability": child.capability,
+                        "edge_type": str(spec.get("edge_type", "trigger")),
                     },
                     now_iso(),
                 )

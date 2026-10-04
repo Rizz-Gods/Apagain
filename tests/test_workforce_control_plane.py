@@ -20,6 +20,28 @@ def write_minimal_config(root: Path, agents: str = '{"agents":[]}'):
 
 
 class WorkforceControlPlaneTests(unittest.TestCase):
+    def test_coverage_audit_identifies_resilient_capabilities(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_minimal_config(
+                root,
+                '{"agents":[{"id":"a","name":"A","capabilities":["alpha"],"status":"available"},'
+                '{"id":"b","name":"B","capabilities":["alpha"],"status":"available"},'
+                '{"id":"c","name":"C","capabilities":["beta"],"status":"available"}]}',
+            )
+            (root / "config" / "workforce.json").write_text(
+                '{"workers":{"a":{"permissions":["read"]},"b":{"permissions":["read"]},"c":{"permissions":["read"]}}}',
+                encoding="utf-8",
+            )
+            registry = WorkforceRegistry(root)
+            report = registry.coverage()
+            alpha = next(item for item in report["capabilities"] if item["capability"] == "alpha")
+            beta = next(item for item in report["capabilities"] if item["capability"] == "beta")
+            self.assertTrue(alpha["resilient"])
+            self.assertTrue(alpha["worker_count"] == 2)
+            self.assertFalse(beta["resilient"])
+            self.assertEqual(report["single_point_count"], 1)
+
     def test_workforce_contract_and_capability_resolution(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -65,7 +87,43 @@ class WorkforceControlPlaneTests(unittest.TestCase):
             self.assertEqual(child["status"], "queued")
             self.assertEqual(child["capability"], "demo")
             self.assertEqual(child["action"], "echo")
+            graph = kernel.db.task_graph(first.id)
+            self.assertEqual(len(graph["edges"]), 1)
+            self.assertEqual(graph["edges"][0]["edge_type"], "trigger")
             kernel.close()
+
+    def test_task_graph_persists_handoff_edges(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_minimal_config(root)
+            kernel = OTHKernel(root)
+            try:
+                first = kernel.submit(
+                    "demo",
+                    "echo",
+                    {
+                        "message": "hello",
+                        "max_retries": 0,
+                        "next": [
+                            {
+                                "capability": "demo",
+                                "action": "echo",
+                                "priority": 40,
+                                "edge_type": "handoff",
+                            }
+                        ],
+                    },
+                )
+                result = kernel.dispatch(first.id)
+                self.assertEqual(result["status"], "succeeded")
+                graph = kernel.db.task_graph(first.id)
+                self.assertEqual(graph["root"], first.id)
+                self.assertEqual(len(graph["nodes"]), 2)
+                self.assertEqual(len(graph["edges"]), 1)
+                self.assertEqual(graph["edges"][0]["parent_task_id"], first.id)
+                self.assertEqual(graph["edges"][0]["edge_type"], "handoff")
+            finally:
+                kernel.close()
 
     def test_pilot_research_plan_builds_a_task_graph_root(self):
         plan = PilotPlanner().plan("find demand for appointment scheduling software")
