@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OTH Console</title>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;background:#0b0d10;color:#eef2f5}
+*{box-sizing:border-box}body{margin:0;height:100vh;display:grid;grid-template-columns:260px 1fr;background:#0b0d10}
+aside{border-right:1px solid #20252b;padding:16px;overflow:auto}
+main{display:grid;grid-template-rows:auto 1fr auto;min-width:0}
+header{padding:16px 20px;border-bottom:1px solid #20252b;display:flex;justify-content:space-between}
+#messages{padding:24px;overflow:auto;max-width:1000px;width:100%;margin:auto}
+.msg{padding:14px 16px;border:1px solid #20252b;border-radius:12px;margin:12px 0;white-space:pre-wrap;line-height:1.45}
+.user{background:#11161b}.assistant{background:#0f1419}
+button{background:#151a20;color:#eef2f5;border:1px solid #2a3139;border-radius:9px;padding:9px 11px;cursor:pointer}
+button:hover{background:#1c232b}.conv{width:100%;text-align:left;margin:6px 0}
+textarea{width:100%;resize:none;background:#0f1419;color:#eef2f5;border:1px solid #29313a;border-radius:12px;padding:14px;font:inherit}
+footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;display:flex;justify-content:flex-end}
+.small{font-size:12px;color:#89939e}.title{font-weight:700}.status{font-size:12px;color:#8de1b0}
+</style>
+</head>
+<body>
+<aside>
+  <div class="title">OVER THE HORIZON</div>
+  <div class="small" style="margin:6px 0 14px">Persistent Mission Console</div>
+  <button id="new">+ New mission chat</button>
+  <div id="convs"></div>
+</aside>
+<main>
+<header><div><b>OTH Console</b><div class="small">Chat is an interface. OTH state lives on your machine.</div></div><div id="status" class="status">checking…</div></header>
+<section id="messages"></section>
+<footer>
+<textarea id="input" rows="3" placeholder="Give OTH a goal…"></textarea>
+<div class="send"><button id="send">Send</button></div>
+</footer>
+</main>
+<script>
+let current=null;
+const $=s=>document.querySelector(s);
+async function api(url,opt){return (await fetch(url,opt)).json()}
+async function loadConvs(){
+  const r=await api('/api/conversations'); const box=$('#convs'); box.innerHTML='';
+  r.items.forEach(c=>{const b=document.createElement('button'); b.className='conv'; b.textContent=c.title; b.onclick=()=>openConv(c.id); box.appendChild(b)})
+}
+async function openConv(id){
+  current=id; const r=await api('/api/conversations/'+id+'/messages'); const box=$('#messages'); box.innerHTML='';
+  r.items.forEach(m=>addMsg(m.role,m.content)); box.scrollTop=box.scrollHeight;
+}
+function addMsg(role,text){const d=document.createElement('div');d.className='msg '+role;d.textContent=text;$('#messages').appendChild(d)}
+async function ensureConv(){
+  if(current)return;
+  const r=await api('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'OTH Mission'})});
+  current=r.id; await loadConvs();
+}
+async function send(){
+  const input=$('#input'); const text=input.value.trim(); if(!text)return;
+  await ensureConv(); addMsg('user',text); input.value='';
+  const r=await api('/api/conversations/'+current+'/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:text})});
+  addMsg('assistant',r.content); $('#messages').scrollTop=$('#messages').scrollHeight;
+}
+$('#send').onclick=send; $('#input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
+$('#new').onclick=async()=>{current=null;$('#messages').innerHTML='';await ensureConv();};
+(async()=>{const s=await api('/api/status');$('#status').textContent=s.console+' · '+s.stats.messages+' stored messages';await loadConvs();const r=await api('/api/conversations');if(r.items.length)openConv(r.items[0].id);})();
+</script>
+</body>
+</html>

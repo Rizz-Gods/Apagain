@@ -1,0 +1,200 @@
+import json
+import os
+import uuid
+import urllib.request
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+from .core.console_store import ConsoleStore
+from .core.pilot import PilotPlanner
+
+ROOT = Path(__file__).resolve().parents[1]
+STORE = ConsoleStore(ROOT / "data" / "console.db")
+WEB_ROOT = ROOT / "console"
+
+def model_config():
+    base = os.getenv("OTH_MODEL_BASE_URL", "").strip().rstrip("/")
+    key = os.getenv("OTH_MODEL_API_KEY", "")
+    name = os.getenv("OTH_MODEL_NAME", "").strip()
+    if not base:
+        base = "http://127.0.0.1:11434/v1"
+    if not name:
+        name = "auto"
+    return base, key, name
+
+def call_model(messages):
+    base, key, name = model_config()
+    if name == "auto":
+        models_url = base + "/models"
+        try:
+            req = urllib.request.Request(models_url, headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            models = [item.get("id") for item in data.get("data", []) if item.get("id")]
+            if not models:
+                return None
+            name = models[0]
+        except Exception:
+            return None
+    payload = json.dumps({
+        "model": name,
+        "messages": messages,
+        "temperature": 0.2,
+    }).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    try:
+        req = urllib.request.Request(base + "/chat/completions", data=payload, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return data["choices"][0]["message"]["content"]
+    except Exception:
+        return None
+
+def pilot_fallback(text: str):
+    planner = PilotPlanner()
+    try:
+        result = planner.plan(text)
+        return (
+            "OTH received the mission.\n\n"
+            f"Goal: {result.goal}\n"
+            f"Strategy: {result.strategy}\n"
+            f"Tasks: {len(result.tasks)}"
+        )
+    except Exception:
+        return (
+            "OTH received and permanently stored this message. "
+            "No model provider is configured yet; the local mission console is online."
+        )
+
+@contextmanager
+def console_singleton():
+    pid_path = ROOT / "data" / "oth-console.pid"
+    pid_path.parent.mkdir(parents=True, exist_ok=True)
+    pid = os.getpid()
+    try:
+        existing = int(pid_path.read_text(encoding="utf-8").strip())
+        os.kill(existing, 0)
+        yield False
+        return
+    except Exception:
+        pass
+    pid_path.write_text(str(pid), encoding="utf-8")
+    try:
+        yield True
+    finally:
+        try:
+            if pid_path.read_text(encoding="utf-8").strip() == str(pid):
+                pid_path.unlink()
+        except OSError:
+            pass
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "OTHConsole/0.1"
+
+    def log_message(self, *_):
+        return
+
+    def json_response(self, status, payload):
+        raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_GET(self):
+        if self.path == "/api/status":
+            base, _, name = model_config()
+            self.json_response(200, {
+                "ok": True,
+                "console": "online",
+                "storage": str(STORE.path),
+                "model_base": base,
+                "model": name,
+                "stats": STORE.stats(),
+            })
+            return
+        if self.path == "/api/conversations":
+            self.json_response(200, {"items": STORE.list_conversations()})
+            return
+        if self.path.startswith("/api/conversations/") and self.path.endswith("/messages"):
+            conversation_id = self.path.split("/")[3]
+            self.json_response(200, {"items": STORE.messages(conversation_id)})
+            return
+        if self.path == "/api/mission":
+            mission_path = ROOT / "data" / "pilot_state.json"
+            mission = json.loads(mission_path.read_text(encoding="utf-8")) if mission_path.exists() else {}
+            self.json_response(200, mission)
+            return
+        if self.path in {"/", "/index.html"}:
+            raw = (WEB_ROOT / "index.html").read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
+        self.send_error(404)
+
+    def read_json(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        return json.loads(self.rfile.read(length).decode("utf-8"))
+
+    def do_POST(self):
+        try:
+            body = self.read_json()
+        except Exception as exc:
+            self.json_response(400, {"error": f"invalid json: {exc}"})
+            return
+
+        if self.path == "/api/conversations":
+            conversation_id = str(uuid.uuid4())
+            title = body.get("title") or "New Mission Chat"
+            item = STORE.create_conversation(conversation_id, title)
+            self.json_response(201, item)
+            return
+
+        if self.path.startswith("/api/conversations/") and self.path.endswith("/messages"):
+            conversation_id = self.path.split("/")[3]
+            text = str(body.get("content", "")).strip()
+            if not text:
+                self.json_response(400, {"error": "empty message"})
+                return
+            if not STORE.get_conversation(conversation_id):
+                self.json_response(404, {"error": "conversation not found"})
+                return
+
+            STORE.add_message(conversation_id, "user", text)
+            history = STORE.messages(conversation_id, 24)
+            messages = [
+                {"role": "system", "content":
+                 "You are the OTH Pilot. The local OTH system is the durable source of truth. "
+                 "Be concise unless explicitly asked for detail. Never claim an action occurred unless it did."}
+            ]
+            messages.extend({"role": item["role"], "content": item["content"]} for item in history)
+            answer = call_model(messages)
+            provider = "model"
+            if answer is None:
+                answer = pilot_fallback(text)
+                provider = "pilot-fallback"
+            STORE.add_message(conversation_id, "assistant", answer, {"provider": provider})
+            self.json_response(200, {"role": "assistant", "content": answer, "provider": provider})
+            return
+
+        self.json_response(404, {"error": "route not found"})
+
+def main():
+    host = os.getenv("OTH_CONSOLE_HOST", "127.0.0.1")
+    port = int(os.getenv("OTH_CONSOLE_PORT", "18765"))
+    with console_singleton() as acquired:
+        if not acquired:
+            print("OTH Console already running")
+            return
+        print(f"OTH Console online at http://{host}:{port}")
+        ThreadingHTTPServer((host, port), Handler).serve_forever()
+
+if __name__ == "__main__":
+    main()
