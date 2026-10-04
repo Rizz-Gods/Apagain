@@ -204,6 +204,46 @@ class Handler(BaseHTTPRequestHandler):
             conversation_id = self.path.split("/")[3]
             self.json_response(200, {"items": STORE.messages(conversation_id)})
             return
+        if self.path.startswith("/api/tasks/") and self.path.endswith("/graph"):
+            task_id = self.path.split("/")[3]
+            db = sqlite3.connect(ROOT / "data" / "oth.db")
+            db.row_factory = sqlite3.Row
+            root = db.execute("SELECT id FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if not root:
+                db.close()
+                self.json_response(404, {"error": "task not found"})
+                return
+            nodes = {}
+            edges = []
+            frontier = [(task_id, 0)]
+            seen = {task_id}
+            while frontier:
+                current, level = frontier.pop(0)
+                row = db.execute(
+                    "SELECT id, capability, action, status, priority, created_at, updated_at "
+                    "FROM tasks WHERE id=?",
+                    (current,),
+                ).fetchone()
+                if row:
+                    nodes[current] = {**dict(row), "level": level}
+                if level >= 12:
+                    continue
+                children = db.execute(
+                    "SELECT e.child_task_id, e.edge_type FROM task_edges e WHERE e.parent_task_id=?",
+                    (current,),
+                ).fetchall()
+                for child in children:
+                    edges.append({
+                        "parent_task_id": current,
+                        "child_task_id": child["child_task_id"],
+                        "edge_type": child["edge_type"],
+                    })
+                    if child["child_task_id"] not in seen:
+                        seen.add(child["child_task_id"])
+                        frontier.append((child["child_task_id"], level + 1))
+            db.close()
+            self.json_response(200, {"root": task_id, "nodes": list(nodes.values()), "edges": edges})
+            return
         if self.path.startswith("/api/tasks/"):
             task_id = self.path.split("/")[3]
             db = sqlite3.connect(ROOT / "data" / "oth.db")

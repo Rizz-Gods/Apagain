@@ -52,18 +52,16 @@ async function watchMission(rootIds){
   const watched=[...rootIds];
   const started=Date.now();
   while(Date.now()-started < 30*60*1000){
-    const snapshots=await Promise.all(watched.map(id=>api('/api/tasks/'+id)));
-    const tasks=snapshots.map(x=>x.task);
-    const terminal=tasks.every(t=>['succeeded','failed','blocked'].includes(t.status));
-    $('#status').textContent=tasks.map(t=>t.status).join(' · ');
-    if(terminal){
-      const summary=tasks.map(t=>{
-        const event=snapshots.find(x=>x.task.id===t.id)?.latest_event;
-        if(t.status==='succeeded') return 'Completed: '+t.capability;
-        if(t.status==='blocked') return 'Blocked: '+t.capability;
-        const error=event?.payload?.error || event?.payload?.reason || 'execution failed';
-        return 'Failed: '+t.capability+' — '+error;
-      }).join('\n');
+    const graphs=await Promise.all(watched.map(id=>api('/api/tasks/'+id+'/graph')));
+    const nodes=graphs.flatMap(graph=>graph.nodes || []);
+    const allTerminal=nodes.length>0 && nodes.every(node=>['succeeded','failed','blocked'].includes(node.status));
+    const counts=nodes.reduce((acc,node)=>{acc[node.status]=(acc[node.status]||0)+1;return acc},{});
+    $('#status').textContent=nodes.length+' tasks · '+(counts.succeeded||0)+' done · '+(counts.running||0)+' running · '+(counts.queued||0)+' queued · '+(counts.failed||0)+' failed · '+(counts.blocked||0)+' blocked';
+    if(allTerminal){
+      const failures=nodes.filter(node=>node.status==='failed' || node.status==='blocked');
+      const summary=failures.length
+        ? failures.map(node=>node.status.toUpperCase()+': '+node.capability+' / '+node.action).join('\n')
+        : 'Mission graph completed: '+nodes.length+' task(s) succeeded.';
       addMsg('assistant',summary);
       $('#messages').scrollTop=$('#messages').scrollHeight;
       return;
