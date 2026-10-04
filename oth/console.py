@@ -302,13 +302,15 @@ class Handler(BaseHTTPRequestHandler):
                 })
                 return
 
-            history = STORE.messages(conversation_id, 24)
+            context = STORE.context_for_model(conversation_id, text, recent=16, retrieved=8, memories=6)
             messages = [
                 {"role": "system", "content":
                  "You are the OTH Pilot. The local OTH system is the durable source of truth. "
+                 "Long conversation history is stored outside model context and selectively retrieved. "
+                 "Use durable mission memory and relevant older conversation when supplied. "
                  "Be concise unless explicitly asked for detail. Never claim an action occurred unless it did."}
             ]
-            messages.extend({"role": item["role"], "content": item["content"]} for item in history)
+            messages.extend(context)
             answer = call_model(messages)
             provider = "model"
             if answer is None:
