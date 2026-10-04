@@ -663,6 +663,84 @@
         "priority": 74,
         "role": "independent_resilience_fallback"
       }
+    },
+    {
+      "id": "social-accounts-fallback",
+      "name": "Social Accounts Fallback",
+      "capabilities": [
+        "social-accounts"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-accounts-fallback",
+        "priority": 60,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-autonomy-fallback",
+      "name": "Social Autonomy Fallback",
+      "capabilities": [
+        "social-autonomy"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-autonomy-fallback",
+        "priority": 82,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-autopilot-fallback",
+      "name": "Social Autopilot Fallback",
+      "capabilities": [
+        "social-autopilot"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-autopilot-fallback",
+        "priority": 80,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-control-fallback",
+      "name": "Social Control Fallback",
+      "capabilities": [
+        "social-control"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-control-fallback",
+        "priority": 78,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-leads-fallback",
+      "name": "Social Leads Fallback",
+      "capabilities": [
+        "social-leads"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-leads-fallback",
+        "priority": 67,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-market-fallback",
+      "name": "Social Market Fallback",
+      "capabilities": [
+        "social-market"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-market-fallback",
+        "priority": 58,
+        "role": "independent_resilience_fallback"
+      }
     }
   ]
 }

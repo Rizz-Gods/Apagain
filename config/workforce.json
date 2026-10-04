@@ -416,6 +416,54 @@
         "local_execute"
       ],
       "objective": "Prepare and diagnose social actions safely without external provider calls."
+    },
+    "social-accounts-fallback": {
+      "department": "distribution",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Provide local account onboarding/status without initiating external OAuth."
+    },
+    "social-autonomy-fallback": {
+      "department": "ops",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Run provider-independent observe-and-plan autonomy cycles."
+    },
+    "social-autopilot-fallback": {
+      "department": "distribution",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Turn supplied opportunities into approval-gated campaign plans."
+    },
+    "social-control-fallback": {
+      "department": "ops",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Provide local operational snapshots and human-attention signals."
+    },
+    "social-leads-fallback": {
+      "department": "distribution",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Ingest, qualify, and summarize leads locally without external outreach."
+    },
+    "social-market-fallback": {
+      "department": "business",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Generate an inbound-first social strategy and workflow blueprint independently."
     }
   }
 }

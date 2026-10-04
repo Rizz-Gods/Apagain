@@ -978,3 +978,397 @@ class SocialActionsFallback(_BaseFallback):
                 "input": payload.get("input", {}),
             })
         return self._unsupported("social-actions", action)
+
+class SocialAccountsFallback(_BaseFallback):
+    id = "social-accounts-fallback"
+    PROVIDERS = ("linkedin", "youtube", "x", "instagram")
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+        self.path = self.root / "data" / "social_accounts_fallback.json"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-accounts"
+
+    def _load(self):
+        if not self.path.exists():
+            return {"accounts": []}
+        try:
+            return json.loads(self.path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"accounts": []}
+
+    def _save(self, data):
+        self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        provider = str(source.get("provider", "")).lower()
+        if action == "status":
+            return FallbackResult(True, {
+                "fallback": True,
+                "accounts": self._load()["accounts"],
+                "live_oauth": False,
+            })
+        if action in {"onboard", "setup"}:
+            providers = [provider] if provider in self.PROVIDERS else list(self.PROVIDERS)
+            checklist = []
+            for item in providers:
+                checklist.append({
+                    "provider": item,
+                    "configured": False,
+                    "credential_required": True,
+                    "live_oauth": False,
+                    "next_step": "configure_official_app_credentials",
+                })
+            return FallbackResult(True, {
+                "fallback": True,
+                "checklist": checklist,
+                "status": "manual_configuration_required",
+            })
+        if action == "oauth_start":
+            if provider not in self.PROVIDERS:
+                return FallbackResult(False, {"fallback": True}, "Unsupported provider")
+            return FallbackResult(True, {
+                "fallback": True,
+                "provider": provider,
+                "status": "manual_oauth_required",
+                "authorization_url": None,
+                "reason": "Fallback does not initiate external OAuth flows.",
+            })
+        if action == "oauth_callback":
+            return FallbackResult(False, {
+                "fallback": True,
+                "provider": provider,
+                "status": "not_supported",
+            }, "Fallback will not exchange OAuth codes without the primary account adapter.")
+        return self._unsupported("social-accounts", action)
+
+
+class SocialAutonomyFallback(_BaseFallback):
+    id = "social-autonomy-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+        self.path = self.root / "data" / "social_autonomy_fallback.json"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-autonomy"
+
+    def _load(self):
+        if not self.path.exists():
+            return {"cycles": [], "instructions": []}
+        try:
+            return json.loads(self.path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"cycles": [], "instructions": []}
+
+    def _save(self, data):
+        self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        data = self._load()
+        if action == "status":
+            return FallbackResult(True, {
+                "fallback": True,
+                "enabled": True,
+                "mode": "observe-plan",
+                "state": data,
+                "external_actions": False,
+            })
+        if action == "command":
+            instruction = str(source.get("instruction", "")).strip()
+            if not instruction:
+                return FallbackResult(False, {"fallback": True}, "instruction is required")
+            data["instructions"].append({
+                "instruction": instruction,
+                "at": datetime.now(timezone.utc).isoformat(),
+            })
+            data["instructions"] = data["instructions"][-50:]
+            self._save(data)
+            return FallbackResult(True, {
+                "fallback": True,
+                "instruction_recorded": True,
+                "next": [{"capability": "social-autonomy", "action": "tick", "priority": 88}],
+            })
+        if action == "tick":
+            queue = source.get("queue") or []
+            decisions = []
+            pending = sum(
+                1 for x in queue
+                if x.get("approval", {}).get("status", "pending") == "pending"
+            )
+            if pending:
+                decisions.append({
+                    "type": "human_review",
+                    "reason": "approval_backlog",
+                    "count": pending,
+                })
+            decisions.append({
+                "type": "observe_and_learn",
+                "reason": "provider_independent_fallback_cycle",
+            })
+            cycle = {"at": datetime.now(timezone.utc).isoformat(), "decisions": decisions}
+            data["cycles"].append(cycle)
+            data["cycles"] = data["cycles"][-50:]
+            self._save(data)
+            return FallbackResult(True, {
+                "fallback": True,
+                "decisions": decisions,
+                "initiatives": [],
+                "external_actions": False,
+            })
+        return self._unsupported("social-autonomy", action)
+
+
+class SocialAutopilotFallback(_BaseFallback):
+    id = "social-autopilot-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-autopilot"
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        if action == "status":
+            path = self.root / "data" / "social_autopilot.json"
+            state = {}
+            if path.exists():
+                try:
+                    state = json.loads(path.read_text(encoding="utf-8"))
+                except Exception:
+                    state = {}
+            return FallbackResult(True, {
+                "fallback": True,
+                "campaigns": state.get("campaigns", []),
+                "runs": state.get("runs", [])[-10:],
+                "external_actions": False,
+            })
+        if action != "run":
+            return self._unsupported("social-autopilot", action)
+        candidates = source.get("candidates") or []
+        min_score = float(source.get("min_score", 65))
+        max_new = max(0, int(source.get("max_new_campaigns", 1)))
+        created = []
+        for row in candidates:
+            if len(created) >= max_new:
+                break
+            score = float(row.get("score", 0) or 0)
+            if score < min_score:
+                continue
+            title = str(row.get("title") or row.get("query") or "Opportunity")
+            created.append({
+                "campaign_id": f"fallback-campaign-{len(created)+1}",
+                "market": title,
+                "offer": row.get("offer") or f"Solution for {title}",
+                "pain": row.get("pain") or row.get("snippet") or "",
+                "proof": row.get("proof") or "",
+                "score": score,
+                "status": "queued_for_review",
+                "platforms": source.get("platforms") or ["linkedin", "x", "youtube", "instagram"],
+                "fallback": True,
+            })
+        return FallbackResult(True, {
+            "fallback": True,
+            "created_campaigns": created,
+            "skipped": max(len(candidates) - len(created), 0),
+            "external_actions": False,
+            "next": [{
+                "capability": "social-content",
+                "action": "draft",
+                "priority": 70,
+            }] if created else [],
+        })
+
+
+class SocialControlFallback(_BaseFallback):
+    id = "social-control-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-control"
+
+    def _read(self, name, default):
+        path = self.root / "data" / name
+        if not path.exists():
+            return default
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return default
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        if action not in {"status", "attention"}:
+            return self._unsupported("social-control", action)
+        queue = self._read("social_queue.json", {"items": []}).get("items", [])
+        campaigns = self._read("social_autopilot.json", {"campaigns": []}).get("campaigns", [])
+        leads = self._read("social_leads.json", {"leads": []}).get("leads", [])
+        attention = []
+        pending = [x for x in queue if x.get("approval", {}).get("status") == "pending"]
+        failed = [x for x in queue if x.get("status") == "failed"]
+        if pending:
+            attention.append({"priority": "human_review", "reason": "content_waiting_for_approval", "count": len(pending)})
+        if failed:
+            attention.append({"priority": "recovery", "reason": "published_action_failed", "count": len(failed)})
+        snapshot = {
+            "fallback": True,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "campaigns": len(campaigns),
+            "content_items": len(queue),
+            "leads": len(leads),
+            "pending_approval": len(pending),
+            "failed_items": len(failed),
+            "attention": attention,
+        }
+        return FallbackResult(True, snapshot)
+
+
+class SocialLeadsFallback(_BaseFallback):
+    id = "social-leads-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+        self.path = self.root / "data" / "social_leads_fallback.json"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-leads"
+
+    def _load(self):
+        if not self.path.exists():
+            return {"leads": []}
+        try:
+            return json.loads(self.path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"leads": []}
+
+    def _save(self, data):
+        self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    @staticmethod
+    def _intent(message):
+        text = str(message or "").lower()
+        buyer = [x for x in ("price", "pricing", "cost", "demo", "buy", "purchase", "interested", "trial", "book") if x in text]
+        support = [x for x in ("bug", "error", "broken", "refund", "support") if x in text]
+        if buyer:
+            return "buyer_intent", min(100, 65 + len(buyer) * 8), buyer
+        if support:
+            return "support", 35, support
+        return "unclear", 20, []
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        data = self._load()
+        if action == "ingest":
+            message = str(source.get("message", ""))
+            intent, score, signals = self._intent(message)
+            contact = str(source.get("contact", "")).strip()
+            existing = next((x for x in data["leads"] if contact and x.get("contact") == contact), None)
+            if existing:
+                existing["score"] = max(existing.get("score", 0), score)
+                existing["intent"] = intent
+                existing["signals"] = sorted(set(existing.get("signals", []) + signals))
+                existing["updated_at"] = datetime.now(timezone.utc).isoformat()
+                lead = existing
+                created = False
+            else:
+                lead = {
+                    "id": f"fallback-lead-{len(data['leads']) + 1}",
+                    "platform": source.get("platform", "unknown"),
+                    "external_id": source.get("external_id", ""),
+                    "contact": contact,
+                    "message": message,
+                    "intent": intent,
+                    "score": score,
+                    "signals": signals,
+                    "consent": bool(source.get("consent", False)),
+                    "status": "new",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                data["leads"].append(lead)
+                created = True
+            self._save(data)
+            return FallbackResult(True, {
+                "fallback": True,
+                "lead": lead,
+                "created": created,
+                "followup_allowed": bool(lead.get("consent")),
+            })
+        if action == "list":
+            return FallbackResult(True, {"fallback": True, "leads": data["leads"]})
+        if action in {"qualify", "convert"}:
+            lead = next((x for x in data["leads"] if x.get("id") == source.get("lead_id")), None)
+            if not lead:
+                return FallbackResult(False, {"fallback": True}, "Unknown lead")
+            lead["status"] = "qualified" if action == "qualify" else "converted"
+            self._save(data)
+            return FallbackResult(True, {"fallback": True, "lead": lead})
+        if action == "summary":
+            rows = {}
+            for lead in data["leads"]:
+                key = lead.get("content_id") or "unattributed"
+                row = rows.setdefault(key, {"content_id": key, "leads": 0, "qualified_leads": 0, "conversions": 0})
+                row["leads"] += 1
+                if lead.get("status") in {"qualified", "converted"}:
+                    row["qualified_leads"] += 1
+                if lead.get("status") == "converted":
+                    row["conversions"] += 1
+            return FallbackResult(True, {
+                "fallback": True,
+                "content_summary": list(rows.values()),
+                "next": [{"capability": "social-optimization", "action": "ingest_funnel", "priority": 60}],
+            })
+        if action == "followup_draft":
+            lead = next((x for x in data["leads"] if x.get("id") == source.get("lead_id")), None)
+            if not lead:
+                return FallbackResult(False, {"fallback": True}, "Unknown lead")
+            if not lead.get("consent"):
+                return FallbackResult(False, {"fallback": True}, "Follow-up blocked because consent is not recorded")
+            return FallbackResult(True, {
+                "fallback": True,
+                "lead_id": lead["id"],
+                "draft": "Thanks for reaching out. Want to share how you handle this today so we can see whether the offer fits?",
+                "approval": "required_before_external_send",
+            })
+        return self._unsupported("social-leads", action)
+
+
+class SocialMarketFallback(_BaseFallback):
+    id = "social-market-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-market"
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        if action not in {"plan", "design"}:
+            return self._unsupported("social-market", action)
+        source = payload.get("input", {})
+        market = str(source.get("market", "target market"))
+        offer = str(source.get("offer", "product or service"))
+        platforms = source.get("platforms") or ["linkedin", "x", "youtube", "instagram"]
+        workflows = [
+            {"id": "research", "goal": "Find recurring buyer pain and language.", "steps": ["collect signals", "cluster pain", "score intent"]},
+            {"id": "content", "goal": "Turn validated pain into platform-native content.", "steps": ["select pain", "draft content", "review claims", "queue for approval"]},
+            {"id": "lead-funnel", "goal": "Capture and qualify opted-in inbound interest.", "steps": ["detect intent", "capture consent", "deduplicate", "score lead"]},
+            {"id": "learning", "goal": "Improve the next cycle using outcomes.", "steps": ["measure engagement", "attribute leads", "compare experiments"]},
+        ]
+        return FallbackResult(True, {
+            "fallback": True,
+            "market": market,
+            "offer": offer,
+            "platforms": platforms,
+            "strategy": "inbound_first",
+            "workflows": workflows,
+            "human_approval": ["external", "financial", "irreversible", "public_claim_with_material_business_impact"],
+            "next": [{"capability": "automation-build", "action": "build", "priority": 55}],
+        })

@@ -118,6 +118,42 @@
         "capability": "social-actions",
         "action": "prompt"
       }
+    ],
+    "social-accounts": [
+      {
+        "capability": "social-accounts",
+        "action": "prompt"
+      }
+    ],
+    "social-autonomy": [
+      {
+        "capability": "social-autonomy",
+        "action": "prompt"
+      }
+    ],
+    "social-autopilot": [
+      {
+        "capability": "social-autopilot",
+        "action": "prompt"
+      }
+    ],
+    "social-control": [
+      {
+        "capability": "social-control",
+        "action": "prompt"
+      }
+    ],
+    "social-leads": [
+      {
+        "capability": "social-leads",
+        "action": "prompt"
+      }
+    ],
+    "social-market": [
+      {
+        "capability": "social-market",
+        "action": "prompt"
+      }
     ]
   }
 }

@@ -54,6 +54,8 @@ from oth.core.resilient_fallbacks import (
     SocialPlannerFallback, SocialEditorialFallback,
     MediaAssetsFallback, MediaIngestFallback, MediaProductionFallback,
     SocialQueueFallback, SocialActionsFallback,
+    SocialAccountsFallback, SocialAutonomyFallback, SocialAutopilotFallback,
+    SocialControlFallback, SocialLeadsFallback, SocialMarketFallback,
 )
 
 class OTHKernel:
@@ -228,6 +230,24 @@ class OTHKernel:
             elif mode == "social-actions-fallback":
                 self.workers.append(SocialActionsFallback())
                 modes.add("social-actions-fallback")
+            elif mode == "social-accounts-fallback":
+                self.workers.append(SocialAccountsFallback(self.root))
+                modes.add("social-accounts-fallback")
+            elif mode == "social-autonomy-fallback":
+                self.workers.append(SocialAutonomyFallback(self.root))
+                modes.add("social-autonomy-fallback")
+            elif mode == "social-autopilot-fallback":
+                self.workers.append(SocialAutopilotFallback(self.root))
+                modes.add("social-autopilot-fallback")
+            elif mode == "social-control-fallback":
+                self.workers.append(SocialControlFallback(self.root))
+                modes.add("social-control-fallback")
+            elif mode == "social-leads-fallback":
+                self.workers.append(SocialLeadsFallback(self.root))
+                modes.add("social-leads-fallback")
+            elif mode == "social-market-fallback":
+                self.workers.append(SocialMarketFallback(self.root))
+                modes.add("social-market-fallback")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:
