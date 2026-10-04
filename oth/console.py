@@ -240,6 +240,14 @@ class Handler(BaseHTTPRequestHandler):
             ]
             self.json_response(200, {"items": payload})
             return
+        if self.path.startswith("/api/missions/") and self.path.endswith("/timeline"):
+            mission_id = self.path.split("/")[3]
+            items = STORE.missions.timeline_for_mission(
+                mission_id,
+                task_db=ROOT / "data" / "oth.db",
+            )
+            self.json_response(200, {"mission_id": mission_id, "items": items})
+            return
         if self.path.startswith("/api/conversations/") and self.path.endswith("/messages"):
             conversation_id = self.path.split("/")[3]
             self.json_response(200, {"items": STORE.messages(conversation_id)})

@@ -321,3 +321,47 @@ def test_policy_block_is_persisted_and_mission_approval_requeues_task(tmp_path):
     finally:
         kernel.close()
         missions.close()
+
+
+def test_mission_timeline_tracks_lifecycle_and_task_events(tmp_path):
+    write_minimal_config(tmp_path)
+    missions = MissionStateStore(tmp_path / "data" / "console.db")
+    kernel = OTHKernel(tmp_path)
+    try:
+        missions.create(
+            "conversation-1",
+            "Timeline mission",
+            "create -> execute -> observe",
+            mission_id="mission-timeline",
+        )
+        task = kernel.submit(
+            "demo",
+            "echo",
+            {
+                "message": "timeline",
+                "mission_id": "mission-timeline",
+                "conversation_id": "conversation-1",
+                "max_retries": 0,
+            },
+            50,
+        )
+        missions.attach_root_tasks("mission-timeline", [task.id])
+        result = kernel.dispatch(task.id)
+        assert result["status"] == "succeeded"
+
+        timeline = missions.timeline_for_mission(
+            "mission-timeline",
+            task_db=kernel.db.path,
+        )
+        kinds = [item["kind"] for item in timeline]
+        assert "mission.created" in kinds
+        assert "mission.roots_attached" in kinds
+        assert "mission.task_updated" in kinds
+        assert any(item.get("source") == "task_event" and item["task_id"] == task.id for item in timeline)
+        assert timeline == sorted(
+            timeline,
+            key=lambda item: (str(item.get("created_at") or ""), int(item.get("id") or 0)),
+        )
+    finally:
+        kernel.close()
+        missions.close()

@@ -851,6 +851,13 @@ class OTHKernel:
                 {"approval_granted": True, "approved_by": "operator"},
                 task_db=self.db.path,
             )
+            self.missions.add_timeline_event(
+                mission_id,
+                "mission.approval_granted",
+                {"approved_by": "operator"},
+                task_id=task_id,
+                status="queued",
+            )
         return {"status": "queued", "changed": True, "mission_id": mission_id or None}
 
     def approve_mission(

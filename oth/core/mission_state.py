@@ -44,12 +44,113 @@ class MissionStateStore:
                 ON missions(conversation_id, updated_at);
             CREATE INDEX IF NOT EXISTS idx_missions_status
                 ON missions(status, updated_at);
+            CREATE TABLE IF NOT EXISTS mission_timeline (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mission_id TEXT NOT NULL,
+                task_id TEXT,
+                kind TEXT NOT NULL,
+                status TEXT,
+                payload TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_mission_timeline_mission
+                ON mission_timeline(mission_id, id);
             """
         )
         self.db.commit()
 
     def close(self) -> None:
         self.db.close()
+
+    def add_timeline_event(
+        self,
+        mission_id: str,
+        kind: str,
+        payload: dict[str, Any] | None = None,
+        task_id: str | None = None,
+        status: str | None = None,
+        created_at: str | None = None,
+    ) -> dict[str, Any]:
+        event_time = created_at or now_iso()
+        self.db.execute(
+            """
+            INSERT INTO mission_timeline
+            (mission_id, task_id, kind, status, payload, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                mission_id,
+                task_id,
+                kind,
+                status,
+                json.dumps(payload or {}, ensure_ascii=False),
+                event_time,
+            ),
+        )
+        self.db.commit()
+        row = self.db.execute(
+            "SELECT id, mission_id, task_id, kind, status, payload, created_at "
+            "FROM mission_timeline WHERE rowid=last_insert_rowid()"
+        ).fetchone()
+        return self._timeline_row(row)
+
+    def timeline_for_mission(
+        self,
+        mission_id: str,
+        limit: int = 200,
+        task_db: str | Path | None = None,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        events = self.db.execute(
+            """
+            SELECT id, mission_id, task_id, kind, status, payload, created_at
+            FROM mission_timeline
+            WHERE mission_id=?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (mission_id, limit),
+        ).fetchall()
+        items = [self._timeline_row(row) for row in reversed(events)]
+        if task_db:
+            mission = self.get(mission_id)
+            if mission:
+                graph = self.graph_for_mission(mission_id, task_db)
+                task_ids = [str(node["id"]) for node in graph.get("nodes", [])]
+                if task_ids:
+                    path = Path(task_db)
+                    if path.exists():
+                        try:
+                            conn = sqlite3.connect(path)
+                            conn.row_factory = sqlite3.Row
+                            placeholders = ",".join("?" for _ in task_ids)
+                            rows = conn.execute(
+                                "SELECT task_id, kind, payload, created_at "
+                                "FROM events WHERE task_id IN (%s) "
+                                "ORDER BY rowid DESC LIMIT ?" % placeholders,
+                                tuple(task_ids) + (limit,),
+                            ).fetchall()
+                            conn.close()
+                            for row in rows:
+                                payload = {}
+                                try:
+                                    payload = json.loads(row["payload"] or "{}")
+                                except (TypeError, ValueError):
+                                    payload = {"raw": row["payload"]}
+                                items.append({
+                                    "id": None,
+                                    "mission_id": mission_id,
+                                    "task_id": row["task_id"],
+                                    "kind": str(row["kind"]),
+                                    "status": None,
+                                    "payload": payload,
+                                    "created_at": row["created_at"],
+                                    "source": "task_event",
+                                })
+                        except sqlite3.Error:
+                            pass
+        items.sort(key=lambda item: (str(item.get("created_at") or ""), int(item.get("id") or 0)))
+        return items[-limit:]
 
     def create(
         self,
@@ -82,6 +183,13 @@ class MissionStateStore:
             ),
         )
         self.db.commit()
+        self.add_timeline_event(
+            mission_id,
+            "mission.created",
+            {"goal": goal, "strategy": strategy},
+            status="queued",
+            created_at=now,
+        )
         return self.get(mission_id) or {}
 
     def attach_root_tasks(self, mission_id: str, root_task_ids: list[str]) -> dict[str, Any]:
@@ -91,6 +199,13 @@ class MissionStateStore:
             (json.dumps(root_task_ids), now, mission_id),
         )
         self.db.commit()
+        self.add_timeline_event(
+            mission_id,
+            "mission.roots_attached",
+            {"root_task_ids": root_task_ids},
+            status=self.get(mission_id)["status"] if self.get(mission_id) else None,
+            created_at=now,
+        )
         return self.get(mission_id) or {}
 
     def get(self, mission_id: str) -> dict[str, Any] | None:
@@ -157,6 +272,17 @@ class MissionStateStore:
             ),
         )
         self.db.commit()
+        self.add_timeline_event(
+            mission_id,
+            "mission.task_updated",
+            {
+                "outcome": outcome or {},
+                "aggregate_status": aggregate,
+            },
+            task_id=task_id,
+            status=aggregate,
+            created_at=now,
+        )
         return self.get(mission_id)
 
     def resume_failed_tasks(
@@ -216,6 +342,14 @@ class MissionStateStore:
                     ),
                 )
                 queued.append(task_id)
+                self.add_timeline_event(
+                    mission_id,
+                    "mission.resume_queued",
+                    {"reason": reason, "approved": task_id in approved},
+                    task_id=task_id,
+                    status="queued",
+                    created_at=now,
+                )
             conn.commit()
             conn.close()
         except (sqlite3.Error, ValueError, TypeError) as exc:
@@ -228,6 +362,13 @@ class MissionStateStore:
 
         self.reconcile(task_db)
         refreshed = self.get(mission_id) or mission
+        if queued:
+            self.add_timeline_event(
+                mission_id,
+                "mission.resume_completed",
+                {"queued_task_ids": queued, "skipped": skipped},
+                status=refreshed["status"],
+            )
         return {
             "mission_id": mission_id,
             "queued": queued,
@@ -270,6 +411,13 @@ class MissionStateStore:
                 ),
             )
             changed += 1
+            self.add_timeline_event(
+                mission["id"],
+                "mission.reconciled",
+                {"previous_status": mission["status"], "graph_status": aggregate},
+                task_id=latest_task_id,
+                status=aggregate,
+            )
         self.db.commit()
         return {"checked": checked, "changed": changed}
 
@@ -353,6 +501,19 @@ class MissionStateStore:
                 ]
             )
         return "\n".join(lines)
+
+    @staticmethod
+    def _timeline_row(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": int(row["id"]) if row["id"] is not None else None,
+            "mission_id": row["mission_id"],
+            "task_id": row["task_id"],
+            "kind": row["kind"],
+            "status": row["status"],
+            "payload": json.loads(row["payload"] or "{}"),
+            "created_at": row["created_at"],
+            "source": "mission",
+        }
 
     @staticmethod
     def _row(row: sqlite3.Row) -> dict[str, Any]:

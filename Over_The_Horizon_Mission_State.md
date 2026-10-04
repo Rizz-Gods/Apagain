@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission Approval Continuity
+## Current subsystem: Mission Observability and Execution Timeline
 
 Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
 
-Previous subsystem: Mission Resume and Retry Control — complete and live-validated
+Previous subsystem: Mission Approval Continuity — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -90,6 +90,14 @@ Previous subsystem: Mission Resume and Retry Control — complete and live-valid
   - Console API: `POST /api/missions/{mission_id}/approve`
   - CLI: `python -m oth.cli mission approve ...`
   - Documentation: `docs/MISSION_APPROVAL.md`
+- Mission Observability and Execution Timeline subsystem:
+  - Durable mission lifecycle events are stored in `data/console.db`.
+  - Underlying `oth.db` task events are correlated by the reachable mission task graph.
+  - Timeline entries preserve task IDs and source (`mission` vs `task_event`).
+  - Console API: `GET /api/missions/{mission_id}/timeline`
+  - CLI: `python -m oth.cli mission timeline ...`
+  - Timeline reads are bounded to 500 events and do not execute actions.
+  - Documentation: `docs/MISSION_OBSERVABILITY.md`
 
 ### Verification achieved
 - Focused engineering tests: PASS
@@ -141,6 +149,12 @@ Previous subsystem: Mission Resume and Retry Control — complete and live-valid
   - Live Console HTTP approval endpoint requeued the exact blocked task.
   - `approved_by=operator` persisted and the mission returned to `queued`.
   - Disposable validation mission/task rows were removed after the check.
+- Mission Observability and Execution Timeline verification: PASS
+  - Focused mission bridge timeline test passed.
+  - Full OTH test suite passed with exit code 0.
+  - Live Console timeline endpoint returned 9 correlated events for a real disposable mission.
+  - Mission lifecycle events and underlying task events were both present.
+  - Disposable mission/task/timeline records were removed after the check.
 - A real console mission previously exposed a false-positive success bug; this was corrected and committed.
 - Commit pushed:
   - `730720b` — `fix: reject false-positive native engineering success`
@@ -160,10 +174,10 @@ Previous subsystem: Mission Resume and Retry Control — complete and live-valid
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Mission Approval Continuity is complete and live-validated.
+None. Mission Observability and Execution Timeline is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, or Mission Approval Continuity unless a regression appears. Continue with the next coherent OTH subsystem using all six as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, or Mission Observability unless a regression appears. Continue with the next coherent OTH subsystem using all seven as established infrastructure.
 
 ## Repository
 Primary OTH directory:

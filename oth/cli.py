@@ -107,6 +107,9 @@ def main(argv=None):
     mission_approve = mission_sub.add_parser("approve")
     mission_approve.add_argument("mission_id")
     mission_approve.add_argument("--task-id", action="append")
+    mission_timeline = mission_sub.add_parser("timeline")
+    mission_timeline.add_argument("mission_id")
+    mission_timeline.add_argument("--limit", type=int, default=200)
     opp = sub.add_parser("opportunities")
     opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
     opp_list = opp_sub.add_parser("list")
@@ -443,11 +446,20 @@ def main(argv=None):
                     ),
                     indent=2,
                 ))
-            else:
+            elif args.mission_cmd == "approve":
                 print(json.dumps(
                     kernel.approve_mission(
                         args.mission_id,
                         task_ids=args.task_id,
+                    ),
+                    indent=2,
+                ))
+            else:
+                print(json.dumps(
+                    kernel.missions.timeline_for_mission(
+                        args.mission_id,
+                        limit=args.limit,
+                        task_db=kernel.db.path,
                     ),
                     indent=2,
                 ))
