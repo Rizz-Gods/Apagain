@@ -30,6 +30,7 @@ from oth.core.local_reasoner import LocalReasonerWorker
 from oth.core.engineering import EngineeringWorker
 from oth.core.ollama_engineer import NativeOllamaEngineer
 from oth.core.engineering_fallback import EngineeringFallback
+from oth.core.engineering_evidence import engineering_result_valid
 from oth.core.social_market import SocialMarketWorker
 from oth.core.social_accounts import SocialAccountManager
 from oth.core.social_content import SocialContentEngine
@@ -447,6 +448,17 @@ class OTHKernel:
                 now_iso(),
             )
             lane_result = worker.execute(candidate.action, lane_payload)
+            if row["capability"] == "engineering" and lane_result.success and not engineering_result_valid(
+                candidate.action,
+                lane_result.output,
+                lane_result.success,
+            ):
+                lane_result = WorkerResult(
+                    False,
+                    dict(lane_result.output or {}),
+                    "implementation_evidence_missing",
+                    retryable=True,
+                )
             lane_history.append({
                 "lane": candidate.lane,
                 "worker_id": candidate.worker_id,

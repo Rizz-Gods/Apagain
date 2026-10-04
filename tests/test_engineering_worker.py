@@ -33,6 +33,7 @@ def test_engineering_worker_runs_verification(monkeypatch, tmp_path):
         if command[:2] == ["git", "status"]:
             return CompletedProcess(command, 0, "", "")
         if command[0] == "opencode":
+            (tmp_path / "implemented.txt").write_text("implemented", encoding="utf-8")
             return CompletedProcess(command, 0, '{"type":"text","text":"implemented"}', "")
         return CompletedProcess(command, 0, "2 passed", "")
 
@@ -43,6 +44,24 @@ def test_engineering_worker_runs_verification(monkeypatch, tmp_path):
     opencode_calls = [command for command in calls if command[0] == "opencode"]
     assert opencode_calls
     assert "--dir" not in opencode_calls[0]
+
+
+def test_opencode_worker_rejects_no_change_even_when_verification_passes(monkeypatch, tmp_path):
+    worker = EngineeringWorker(tmp_path)
+    worker._opencode = lambda: "opencode"
+    worker._test_command = lambda: ["pytest", "-q"]
+
+    def fake_run(command, timeout, env=None):
+        if command[:2] == ["git", "status"]:
+            return CompletedProcess(command, 0, "", "")
+        if command[0] == "opencode":
+            return CompletedProcess(command, 0, '{"type":"text","text":"implemented"}', "")
+        return CompletedProcess(command, 0, "2 passed", "")
+
+    monkeypatch.setattr(worker, "_run", fake_run)
+    result = worker.execute("execute", {"prompt": "Implement a safe change"})
+    assert not result.success
+    assert "implementation_evidence_missing" in result.output["failures"][-1]
 
 
 def test_engineering_fallback_never_claims_execution(tmp_path):

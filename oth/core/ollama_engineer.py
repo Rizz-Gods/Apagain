@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .model_router import ModelRoute, ModelRouter
+from .engineering_evidence import implementation_expected, workspace_changed, workspace_fingerprint
 
 
 class NativeOllamaEngineer:
@@ -221,6 +222,8 @@ class NativeOllamaEngineer:
             route = ModelRoute("local-fallback", fallback, route.complexity, f"requested {route.model} unavailable locally")
 
         before = self._git(["status", "--short"])
+        workspace_before = workspace_fingerprint(self.root)
+        requires_change = implementation_expected(action, task, payload)
         messages = [
             {"role": "system", "content":
              "You are OTH Native Engineering. Modify the repository using tools and verify your work. "
@@ -272,8 +275,15 @@ class NativeOllamaEngineer:
 
         verification = self._run("python -m pytest -q") if (self.root / "pytest.ini").exists() else {"returncode": 0, "stdout": "no pytest.ini", "stderr": ""}
         after = self._git(["status", "--short"])
+        workspace_after = workspace_fingerprint(self.root)
+        changed = workspace_changed(workspace_before, workspace_after)
         failed_tools = [item for item in trace if not item.get("success")]
-        success = verification.get("returncode") == 0 and finished and not failed_tools
+        success = (
+            verification.get("returncode") == 0
+            and finished
+            and not failed_tools
+            and (changed or not requires_change)
+        )
         return WorkerResult(
             success,
             {
@@ -286,6 +296,10 @@ class NativeOllamaEngineer:
                 "tool_trace": trace[-40:],
                 "changed_before": before,
                 "changed_after": after,
+                "workspace_before": workspace_before,
+                "workspace_after": workspace_after,
+                "implementation_changed": changed,
+                "implementation_expected": requires_change,
                 "verification": verification,
             },
             None if success else "engineering_verification_failed",

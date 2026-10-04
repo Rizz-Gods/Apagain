@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .model_router import ModelRouter, ModelRoute
+from .engineering_evidence import implementation_expected, workspace_changed, workspace_fingerprint
 
 
 class EngineeringWorker:
@@ -115,6 +116,8 @@ class EngineeringWorker:
             ["git", "status", "--porcelain"],
             30,
         ).stdout.strip()
+        workspace_before = workspace_fingerprint(self.root)
+        requires_change = implementation_expected(action, task, payload)
 
         failures: list[str] = []
         attempts = 0
@@ -229,8 +232,17 @@ class EngineeringWorker:
             ["git", "status", "--porcelain"],
             30,
         ).stdout.strip()
+        workspace_after = workspace_fingerprint(self.root)
+        implementation_changed = workspace_changed(workspace_before, workspace_after)
 
-        success = not failures and (verification is None or verification["passed"])
+        success = (
+            not failures
+            and (verification is None or verification["passed"])
+            and (implementation_changed or not requires_change)
+        )
+        if not implementation_changed and requires_change and not failures:
+            failures.append("implementation_evidence_missing: repository content did not change")
+            success = False
         if not success:
             return WorkerResult(
                 False,
@@ -239,6 +251,10 @@ class EngineeringWorker:
                     "attempts": attempts,
                     "changed_before": changed_before,
                     "changed_after": changed_after,
+                    "workspace_before": workspace_before,
+                    "workspace_after": workspace_after,
+                    "implementation_changed": implementation_changed,
+                    "implementation_expected": requires_change,
                     "agent_output": final_agent_output[-12000:],
                     "verification": verification,
                     "failures": failures[-3:],
@@ -254,6 +270,10 @@ class EngineeringWorker:
                 "attempts": attempts,
                 "changed_before": changed_before,
                 "changed_after": changed_after,
+                "workspace_before": workspace_before,
+                "workspace_after": workspace_after,
+                "implementation_changed": implementation_changed,
+                "implementation_expected": requires_change,
                 "agent_output": final_agent_output[-12000:],
                 "verification": verification,
             },

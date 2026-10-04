@@ -309,6 +309,34 @@ class Database:
             (limit,),
         ).fetchall()
 
+    def engineering_scorecard(self, worker_ids: list[str] | None = None, limit: int = 20):
+        if worker_ids is None:
+            rows = self.conn.execute(
+                "SELECT DISTINCT agent_id FROM agent_stats "
+                "WHERE agent_id LIKE '%engineer%' OR agent_id LIKE '%engineering%'"
+            ).fetchall()
+            worker_ids = [row["agent_id"] for row in rows]
+        if not worker_ids:
+            return []
+        placeholders = ",".join("?" for _ in worker_ids)
+        query = (
+            "SELECT a.agent_id AS worker_id, "
+            "(a.successes + a.failures) AS runs, "
+            "a.successes, a.failures, "
+            "ROUND(CASE WHEN (a.successes + a.failures) > 0 "
+            "THEN CAST(a.successes AS REAL) / (a.successes + a.failures) ELSE 1.0 END, 4) AS reliability, "
+            "COUNT(e.id) AS evaluated_runs, "
+            "ROUND(COALESCE(AVG(e.quality), 0.0), 4) AS avg_quality, "
+            "ROUND(COALESCE(AVG(e.lane), 0.0), 2) AS avg_lane, "
+            "a.last_run "
+            "FROM agent_stats a "
+            "LEFT JOIN evaluations e ON e.worker_id=a.agent_id AND e.capability='engineering' "
+            f"WHERE a.agent_id IN ({placeholders}) "
+            "GROUP BY a.agent_id "
+            "ORDER BY reliability DESC, avg_quality DESC LIMIT ?"
+        )
+        return self.conn.execute(query, (*worker_ids, limit)).fetchall()
+
     def worker_circuit_state(self, worker_id: str, failure_threshold: int = 3, window: int = 12) -> dict[str, Any]:
         rows = self.conn.execute(
             "SELECT kind,payload,created_at FROM events "

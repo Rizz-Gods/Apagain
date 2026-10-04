@@ -91,6 +91,10 @@ def main(argv=None):
     sub.add_parser("agents")
     sub.add_parser("workforce")
     sub.add_parser("coverage")
+    engineering = sub.add_parser("engineering")
+    engineering_sub = engineering.add_subparsers(dest="engineering_cmd", required=True)
+    engineering_scorecard = engineering_sub.add_parser("scorecard")
+    engineering_scorecard.add_argument("--limit", type=int, default=20)
     opp = sub.add_parser("opportunities")
     opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
     opp_list = opp_sub.add_parser("list")
@@ -390,6 +394,24 @@ def main(argv=None):
             return
         if args.cmd == "coverage":
             print(json.dumps(kernel.workforce.coverage(kernel.db), indent=2))
+            return
+        if args.cmd == "engineering":
+            if args.engineering_cmd == "scorecard":
+                coverage = kernel.workforce.coverage(kernel.db)
+                engineering = next(
+                    item for item in coverage["capabilities"]
+                    if item["capability"] == "engineering"
+                )
+                print(json.dumps(
+                    [
+                        dict(row)
+                        for row in kernel.db.engineering_scorecard(
+                            engineering["active_workers"],
+                            args.limit,
+                        )
+                    ],
+                    indent=2,
+                ))
             return
         if args.cmd == "opportunities":
             rows = (kernel.db.top_opportunities(args.limit)
