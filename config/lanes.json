@@ -58,6 +58,36 @@
         "capability": "media-transcription",
         "action": "prompt"
       }
+    ],
+    "social-analytics": [
+      {
+        "capability": "social-analytics",
+        "action": "prompt"
+      }
+    ],
+    "social-optimization": [
+      {
+        "capability": "social-optimization",
+        "action": "prompt"
+      }
+    ],
+    "social-content": [
+      {
+        "capability": "social-content",
+        "action": "prompt"
+      }
+    ],
+    "social-planner": [
+      {
+        "capability": "social-planner",
+        "action": "prompt"
+      }
+    ],
+    "social-editor": [
+      {
+        "capability": "social-editor",
+        "action": "prompt"
+      }
     ]
   }
 }

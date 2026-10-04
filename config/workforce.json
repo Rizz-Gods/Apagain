@@ -336,6 +336,46 @@
         "local_execute"
       ],
       "objective": "Import transcript sidecars or supplied transcript text when speech recognition is unavailable."
+    },
+    "social-analytics-fallback": {
+      "department": "analytics",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Normalize locally supplied metrics when live providers are unavailable."
+    },
+    "social-optimization-fallback": {
+      "department": "analytics",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Rank recorded experiments and suggest controlled variants independently."
+    },
+    "social-content-fallback": {
+      "department": "content",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Draft platform-safe copy independently when the primary content engine is unavailable."
+    },
+    "social-planner-fallback": {
+      "department": "content",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Assign provider-neutral schedule slots without bypassing approval."
+    },
+    "social-editor-fallback": {
+      "department": "content",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Create production-ready editorial briefs independently."
     }
   }
 }

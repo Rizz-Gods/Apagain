@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import json
 import re
 import shutil
@@ -340,4 +341,307 @@ class MediaTranscriptionFallback(_BaseFallback):
             "duration": end,
             "segments": [{"start": 0.0, "end": end, "text": text, "words": []}],
             "srt_path": str(srt_path.relative_to(self.root)),
+        })
+
+
+class SocialAnalyticsFallback(_BaseFallback):
+    id = "social-analytics-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+        self.path = self.root / "data" / "social_metrics.json"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-analytics"
+
+    def _load(self):
+        if not self.path.exists():
+            return {"items": []}
+        try:
+            return json.loads(self.path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"items": []}
+
+    def _save(self, data):
+        self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        if action == "list":
+            return FallbackResult(True, {"fallback": True, "items": self._load().get("items", [])})
+        if action == "record":
+            data = self._load()
+            item = {
+                "content_id": source.get("content_id"),
+                "platform": source.get("platform"),
+                "external_id": source.get("external_id", ""),
+                "metrics": source.get("metrics", {}),
+                "status": "manual_fallback_record",
+            }
+            data["items"].append(item)
+            self._save(data)
+            return FallbackResult(True, {"fallback": True, "record": item})
+        if action == "fetch":
+            metrics = source.get("metrics")
+            if not isinstance(metrics, dict):
+                return FallbackResult(
+                    True,
+                    {"fallback": True, "status": "awaiting_provider_metrics", "live": False},
+                )
+            item = {
+                "content_id": source.get("content_id"),
+                "platform": source.get("platform"),
+                "external_id": source.get("external_id"),
+                "metrics": metrics,
+                "status": "fallback_local_metrics",
+                "live": False,
+            }
+            return FallbackResult(True, {"fallback": True, "record": item, "next": []})
+        if action == "sync":
+            return FallbackResult(True, {
+                "fallback": True,
+                "results": [],
+                "synced": 0,
+                "next": [],
+                "status": "provider_independent_sync_only",
+            })
+        return self._unsupported("social-analytics", action)
+
+
+class SocialOptimizationFallback(_BaseFallback):
+    id = "social-optimization-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+        self.path = self.root / "data" / "social_learning.json"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-optimization"
+
+    @staticmethod
+    def _score(metrics):
+        impressions = max(float(metrics.get("impressions", 0) or 0), 1.0)
+        engagements = float(metrics.get("engagements", 0) or 0)
+        qualified = float(metrics.get("qualified_leads", 0) or 0)
+        conversions = float(metrics.get("conversions", 0) or 0)
+        return round(
+            engagements / impressions * 100
+            + qualified / impressions * 500
+            + conversions / impressions * 1000, 4
+        )
+
+    def _load(self):
+        if not self.path.exists():
+            return {"experiments": [], "insights": []}
+        try:
+            return json.loads(self.path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"experiments": [], "insights": []}
+
+    def _save(self, data):
+        self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        data = self._load()
+        if action == "record":
+            metrics = source.get("metrics", {})
+            row = {
+                "platform": source.get("platform", ""),
+                "content_id": source.get("content_id", ""),
+                "hook": source.get("hook", ""),
+                "format": source.get("format", ""),
+                "pillar": source.get("pillar", ""),
+                "metrics": metrics,
+                "score": self._score(metrics),
+                "fallback": True,
+            }
+            data["experiments"] = [
+                x for x in data.get("experiments", [])
+                if not (
+                    x.get("platform") == row["platform"]
+                    and x.get("content_id") == row["content_id"]
+                )
+            ]
+            data["experiments"].append(row)
+            self._save(data)
+            return FallbackResult(True, {"fallback": True, "experiment": row, "status": "recorded"})
+        if action == "ingest_funnel":
+            updated = []
+            for summary in source.get("content_summary", []) or []:
+                for row in data.get("experiments", []):
+                    if row.get("content_id") == summary.get("content_id"):
+                        row.setdefault("metrics", {})["qualified_leads"] = summary.get("qualified_leads", 0)
+                        row["metrics"]["conversions"] = summary.get("conversions", 0)
+                        row["score"] = self._score(row["metrics"])
+                        updated.append(row["content_id"])
+            self._save(data)
+            return FallbackResult(True, {"fallback": True, "updated_content_ids": updated, "synced": len(updated)})
+        if action == "optimize":
+            platform = source.get("platform")
+            rows = [x for x in data.get("experiments", []) if not platform or x.get("platform") == platform]
+            rows.sort(key=lambda x: x.get("score", 0), reverse=True)
+            return FallbackResult(True, {
+                "fallback": True,
+                "best": rows[:5],
+                "recommendations": [{
+                    "type": "controlled_iteration",
+                    "message": "Preserve winning combinations and vary one variable at a time.",
+                }],
+                "next_experiments": [
+                    {"name": "hook-contrast", "change": "hook", "variant_instruction": "Try a sharper opening while preserving the proof."},
+                    {"name": "format-shift", "change": "format", "variant_instruction": "Republish the winning idea in one adjacent format."},
+                    {"name": "cta-friction", "change": "cta", "variant_instruction": "Reduce CTA friction while retaining buyer intent."},
+                ] if rows else [],
+            })
+        return self._unsupported("social-optimization", action)
+
+
+class SocialContentFallback(_BaseFallback):
+    id = "social-content-fallback"
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-content"
+
+    @staticmethod
+    def _hashtags(market, offer):
+        tags = []
+        for word in re.findall(r"[A-Za-z0-9]+", f"{market} {offer}"):
+            if len(word) >= 4:
+                tag = f"#{word.lower()}"
+                if tag not in tags:
+                    tags.append(tag)
+        return tags[:5]
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        if action == "list":
+            return FallbackResult(True, {"fallback": True, "items": []})
+        if action not in {"draft", "queue"}:
+            return self._unsupported("social-content", action)
+        market = str(source.get("market", "target market"))
+        offer = str(source.get("offer", "offer"))
+        pain = str(source.get("pain", "Manual work is consuming growth capacity."))
+        proof = str(source.get("proof", "Show one concrete mechanism or result."))
+        cta = str(source.get("cta", "Reply with your current workflow."))
+        hook = str(source.get("hook", "")).strip() or pain
+        tags = " ".join(self._hashtags(market, offer))
+        variants = {
+            "linkedin": {"format": "text_or_carousel", "hook": hook, "text": f"{hook}\n\n{pain}\n\n{proof}\n\n{cta}\n\n{tags}".strip()},
+            "x": {"format": "text", "hook": hook, "text": f"{hook} {proof} {cta}".strip()[:280]},
+            "youtube": {"format": "short_or_video", "hook": hook, "title": f"{hook[:70]} | {offer}", "description": f"{hook}\n\n{proof}\n\n{cta}".strip()},
+            "instagram": {"format": "reel_or_carousel", "hook": hook, "caption": f"{hook}\n\n{pain}\n\n{proof}\n\n{cta}\n\n{tags}".strip()},
+        }
+        platforms = source.get("platforms") or list(variants)
+        variants = {k: variants[k] for k in platforms if k in variants}
+        qa = {
+            "status": "passed" if variants else "failed",
+            "errors": [] if variants else ["no_supported_platforms"],
+            "warnings": ["fallback_copy_needs_human_review"],
+        }
+        package = {
+            "version": 1,
+            "campaign_id": source.get("campaign_id", ""),
+            "market": market,
+            "offer": offer,
+            "pain": pain,
+            "proof": proof,
+            "cta": cta,
+            "hook": hook,
+            "variants": variants,
+            "qa": qa,
+            "claim_check": {"required": True, "status": "pending"},
+            "generated_by": self.id,
+        }
+        queued = [{
+            "content_id": f"fallback-{platform}-{index}",
+            "platform": platform,
+            "payload": variant,
+            "status": "queued",
+            "approval": {"required": True, "status": "pending"},
+        } for index, (platform, variant) in enumerate(variants.items(), 1)] if action == "queue" else []
+        return FallbackResult(True, {
+            "fallback": True,
+            "package": package,
+            "queued": queued,
+            "next": [],
+        })
+
+
+class SocialPlannerFallback(_BaseFallback):
+    id = "social-planner-fallback"
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-planner"
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        if action not in {"plan", "preview"}:
+            return self._unsupported("social-planner", action)
+        source = payload.get("input", {})
+        now = datetime.now(timezone.utc)
+        items = source.get("items") or []
+        planned = []
+        for index, item in enumerate(items[:50]):
+            platform = str(item.get("platform", "default")).lower()
+            due = now + __import__("datetime").timedelta(minutes=30 * (index + 1))
+            planned.append({
+                "content_id": item.get("content_id"),
+                "campaign_id": item.get("campaign_id"),
+                "platform": platform,
+                "due_at": due.isoformat(),
+                "timezone": "UTC",
+                "approval_status": item.get("approval", {}).get("status", "pending"),
+            })
+        return FallbackResult(True, {
+            "fallback": True,
+            "planned": planned,
+            "count": len(planned),
+            "approval_bypassed": False,
+            "note": "Fallback planner uses provider-neutral UTC slots; it never approves publication.",
+        })
+
+
+class SocialEditorialFallback(_BaseFallback):
+    id = "social-editor-fallback"
+
+    def supports(self, capability: str) -> bool:
+        return capability == "social-editor"
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        if action not in {"brief", "plan", "review"}:
+            return self._unsupported("social-editor", action)
+        source = payload.get("input", {})
+        if action == "review":
+            return FallbackResult(True, {"fallback": True, "briefs": [], "revisions": []})
+        campaign = source.get("campaign") or {}
+        platforms = source.get("platforms") or ["linkedin", "x", "youtube", "instagram"]
+        pain = str(campaign.get("pain", "the problem"))
+        proof = str(campaign.get("proof", "one concrete proof point"))
+        briefs = []
+        for platform in platforms:
+            p = str(platform).lower()
+            fmt = {"youtube": "short", "instagram": "reel", "linkedin": "carousel_or_text"}.get(p, "text_or_visual")
+            briefs.append({
+                "brief_id": f"fallback-{campaign.get('campaign_id', 'campaign')}-{p}",
+                "campaign_id": campaign.get("campaign_id"),
+                "platform": p,
+                "purpose": source.get("purpose", "discovery"),
+                "funnel_stage": source.get("funnel_stage", "awareness"),
+                "format": fmt,
+                "duration_seconds": 30 if p in {"youtube", "instagram"} else 0,
+                "hook": pain,
+                "claim": pain,
+                "proof": proof,
+                "sources": source.get("sources") or ["campaign brief"],
+                "edit_recipe": ["open on pain", "show mechanism", "show proof", "end with one CTA"],
+                "status": "ready_for_production",
+                "fallback": True,
+            })
+        return FallbackResult(True, {
+            "fallback": True,
+            "briefs": briefs,
+            "count": len(briefs),
+            "next": [],
         })

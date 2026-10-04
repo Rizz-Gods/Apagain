@@ -1,4 +1,4 @@
-﻿import json
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +11,11 @@ from oth.core.resilient_fallbacks import (
     WorkflowCompilerFallback,
     MediaQAFallback,
     MediaTranscriptionFallback,
+    SocialAnalyticsFallback,
+    SocialOptimizationFallback,
+    SocialContentFallback,
+    SocialPlannerFallback,
+    SocialEditorialFallback,
 )
 from oth.core.workforce import WorkforceRegistry
 
@@ -61,7 +66,10 @@ class ResilientFallbackTests(unittest.TestCase):
             self.assertTrue(built.success)
             project = Path(built.output["projects"][0]["project_path"])
             compiler = WorkflowCompilerFallback(root)
-            compiled = compiler.execute("compile", {"input": {"projects": [{"project_path": str(project)}]}})
+            compiled = compiler.execute(
+                "compile",
+                {"input": {"projects": [{"project_path": str(project)}]}}
+            )
             self.assertTrue(compiled.success)
             self.assertTrue((project / "oth.workflow.fallback.json").exists())
             self.assertFalse(compiled.output["compiled"][0]["active"])
@@ -78,7 +86,10 @@ class ResilientFallbackTests(unittest.TestCase):
             )
             (project / "README.md").write_text("# Demo", encoding="utf-8")
 
-            qa = QAFallback(root).execute("validate", {"input": {"projects": [{"project_path": str(project)}]}})
+            qa = QAFallback(root).execute(
+                "validate",
+                {"input": {"projects": [{"project_path": str(project)}]}}
+            )
             self.assertTrue(qa.success)
             self.assertEqual(qa.output["results"][0]["status"], "passed")
 
@@ -97,7 +108,9 @@ class ResilientFallbackTests(unittest.TestCase):
             root = Path(tmp)
             media = root / "clip.mp4"
             media.write_bytes(b"x")
-            qa = MediaQAFallback(root).execute("check", {"input": {"media_ref": str(media)}})
+            qa = MediaQAFallback(root).execute(
+                "check", {"input": {"media_ref": str(media)}}
+            )
             self.assertTrue(qa.success)
             self.assertEqual(qa.output["verification_mode"], "filesystem-structural")
             tx = MediaTranscriptionFallback(root).execute("transcribe", {
@@ -106,7 +119,85 @@ class ResilientFallbackTests(unittest.TestCase):
             self.assertTrue(tx.success)
             self.assertEqual(tx.output["mode"], "sidecar-import")
 
+    def test_social_fallbacks_preserve_safety_boundaries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            analytics = SocialAnalyticsFallback(root)
+            recorded = analytics.execute("record", {
+                "input": {
+                    "content_id": "c1",
+                    "platform": "linkedin",
+                    "metrics": {"impressions": 100, "engagements": 10},
+                }
+            })
+            self.assertTrue(recorded.success)
+            fetched = analytics.execute("fetch", {
+                "input": {
+                    "content_id": "c1",
+                    "platform": "linkedin",
+                    "external_id": "x",
+                    "metrics": {"impressions": 100},
+                }
+            })
+            self.assertEqual(
+                fetched.output["record"]["status"],
+                "fallback_local_metrics",
+            )
+
+            optimizer = SocialOptimizationFallback(root)
+            optimizer.execute("record", {
+                "input": {
+                    "content_id": "c1",
+                    "platform": "linkedin",
+                    "metrics": {"impressions": 100, "engagements": 20},
+                }
+            })
+            best = optimizer.execute(
+                "optimize", {"input": {"platform": "linkedin"}}
+            )
+            self.assertTrue(best.output["best"])
+
+            content = SocialContentFallback().execute("queue", {
+                "input": {
+                    "market": "B2B founders",
+                    "offer": "automation audit",
+                    "platforms": ["linkedin"],
+                }
+            })
+            self.assertTrue(content.success)
+            self.assertEqual(
+                content.output["queued"][0]["approval"]["status"],
+                "pending",
+            )
+
+            planned = SocialPlannerFallback().execute("plan", {
+                "input": {
+                    "items": [{
+                        "content_id": "c1",
+                        "approval": {"status": "pending"},
+                    }]
+                }
+            })
+            self.assertFalse(planned.output["approval_bypassed"])
+
+            editorial = SocialEditorialFallback().execute("brief", {
+                "input": {
+                    "campaign": {
+                        "campaign_id": "c1",
+                        "market": "B2B founders",
+                        "pain": "Manual follow-up leaks leads.",
+                        "proof": "A workflow map isolates repetitive tasks.",
+                    },
+                    "platforms": ["instagram", "youtube"],
+                }
+            })
+            self.assertEqual(editorial.output["count"], 2)
+            self.assertTrue(all(
+                x["status"] == "ready_for_production"
+                for x in editorial.output["briefs"]
+            ))
+
 
 if __name__ == "__main__":
     unittest.main()
-

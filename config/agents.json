@@ -533,6 +533,71 @@
         "priority": 72,
         "role": "independent_resilience_fallback"
       }
+    },
+    {
+      "id": "social-analytics-fallback",
+      "name": "Social Analytics Fallback",
+      "capabilities": [
+        "social-analytics"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-analytics-fallback",
+        "priority": 68,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-optimization-fallback",
+      "name": "Social Optimization Fallback",
+      "capabilities": [
+        "social-optimization"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-optimization-fallback",
+        "priority": 69,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-content-fallback",
+      "name": "Social Content Fallback",
+      "capabilities": [
+        "social-content"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-content-fallback",
+        "priority": 72,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-planner-fallback",
+      "name": "Social Planner Fallback",
+      "capabilities": [
+        "social-planner"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-planner-fallback",
+        "priority": 65,
+        "role": "independent_resilience_fallback"
+      }
+    },
+    {
+      "id": "social-editor-fallback",
+      "name": "Social Editorial Fallback",
+      "capabilities": [
+        "social-editor"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "social-editor-fallback",
+        "priority": 79,
+        "role": "independent_resilience_fallback"
+      }
     }
   ]
 }
