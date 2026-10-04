@@ -79,6 +79,11 @@
       "permissions": ["read", "browser_read", "research"],
       "objective": "Provide a browser-independent market evidence lane over direct HTTPS."
     },
+    "reasoning-local": {
+      "department": "engineering",
+      "permissions": ["read", "local_execute"],
+      "objective": "Keep planning and structured reasoning available when external model execution is unavailable."
+    },
     "social-autonomy": {
       "department": "ops",
       "permissions": ["read", "local_execute", "orchestrate"]

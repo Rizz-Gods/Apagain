@@ -11,6 +11,16 @@
       }
     },
     {
+      "id": "reasoning-local",
+      "name": "Local Reasoning Fallback",
+      "capabilities": ["reasoning"],
+      "status": "available",
+      "metadata": {
+        "mode": "local-reasoning",
+        "priority": 28
+      }
+    },
+    {
       "id": "scout-http",
       "name": "HTTP Market Scout",
       "capabilities": ["scout"],

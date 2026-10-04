@@ -6,9 +6,11 @@ from oth.core.web_scout import WebScoutHTTPWorker
 
 
 class WebScoutHTTPTests(unittest.TestCase):
-    def test_supports_scout(self):
-        self.assertTrue(WebScoutHTTPWorker().supports("scout"))
-        self.assertFalse(WebScoutHTTPWorker().supports("research"))
+    def test_supports_scout_and_research_fallback(self):
+        worker = WebScoutHTTPWorker()
+        self.assertTrue(worker.supports("scout"))
+        self.assertTrue(worker.supports("research"))
+        self.assertFalse(worker.supports("browser"))
 
     def test_quality_rejects_unrelated_result(self):
         worker = WebScoutHTTPWorker()

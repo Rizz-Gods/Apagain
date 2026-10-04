@@ -23,6 +23,7 @@ from oth.workers.builtin import BuiltinWorker, WorkerResult
 from oth.workers.external import ExternalAgentWorker
 from oth.core.scout import ScoutWorker
 from oth.core.web_scout import WebScoutHTTPWorker
+from oth.core.local_reasoner import LocalReasonerWorker
 from oth.core.social_market import SocialMarketWorker
 from oth.core.social_accounts import SocialAccountManager
 from oth.core.social_content import SocialContentEngine
@@ -62,7 +63,9 @@ class OTHKernel:
         modes = set()
         for agent in self.registry.load_agents():
             mode = agent.metadata.get("mode")
-            if mode == "browser":
+            if mode == "local-reasoning":
+                self.workers.append(LocalReasonerWorker())
+            elif mode == "browser":
                 self.workers.append(BrowserWorker(agent))
             elif mode == "scout":
                 self.workers.append(ScoutWorker(agent))

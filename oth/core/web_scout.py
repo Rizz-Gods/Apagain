@@ -27,7 +27,7 @@ class WebScoutHTTPWorker:
         self.command = str((agent.metadata if agent else {}).get("command", "curl.exe"))
 
     def supports(self, capability: str) -> bool:
-        return capability == "scout"
+        return capability in {"scout", "research"}
 
     @staticmethod
     def _now() -> str:
@@ -136,9 +136,15 @@ class WebScoutHTTPWorker:
         return results
 
     def execute(self, action: str, payload: dict) -> WebScoutResult:
-        if action != "scan":
+        if action not in {"scan", "prompt"}:
             return WebScoutResult(False, {}, f"Unsupported scout-http action: {action}")
-        queries = payload.get("queries") or []
+        if action == "prompt":
+            prompt = str(payload.get("prompt", "")).strip()
+            if not prompt:
+                return WebScoutResult(False, {}, "Missing research prompt")
+            queries = [prompt, f"{prompt} official", f"{prompt} discussion"]
+        else:
+            queries = payload.get("queries") or []
         if not isinstance(queries, list) or not queries:
             return WebScoutResult(False, {}, "queries must be a non-empty list")
         signals = []
@@ -146,7 +152,16 @@ class WebScoutHTTPWorker:
             for query in queries[:8]:
                 signals.extend(self._extract(str(query), self._search(str(query))))
             dedup = {(x["url"], x["query"]): x for x in signals}
-            return WebScoutResult(True, {"signals": list(dedup.values())[:40], "count": len(dedup), "transport": "https"})
+            output = {
+                "signals": list(dedup.values())[:40],
+                "count": len(dedup),
+                "transport": "https",
+            }
+            if action == "prompt":
+                output["fallback"] = True
+                output["fallback_reason"] = "external_research_unavailable"
+                output["response"] = "Web evidence collected; synthesize from returned signals."
+            return WebScoutResult(True, output)
         except TimeoutExpired as exc:
             return WebScoutResult(False, {"signals": signals}, str(exc), retryable=True)
         except Exception as exc:

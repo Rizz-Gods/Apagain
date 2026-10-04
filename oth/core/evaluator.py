@@ -36,9 +36,14 @@ class ExecutionEvaluator:
             + 0.25 * lane_efficiency
             + 0.15 * output_signal
         )
+        fallback = bool(output.get("fallback"))
+        if fallback:
+            quality *= 0.70
         quality = round(max(0.0, min(1.0, quality)), 4)
 
-        if success and lane == 1:
+        if success and fallback:
+            lesson = "fallback lane completed the task with reduced capability"
+        elif success and lane == 1:
             lesson = "primary lane completed cleanly"
         elif success:
             lesson = f"lane {lane} recovered the task after earlier lane failure"
