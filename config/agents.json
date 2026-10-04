@@ -741,6 +741,32 @@
         "priority": 58,
         "role": "independent_resilience_fallback"
       }
+    },
+    {
+      "id": "browser-http-fallback",
+      "name": "Browser HTTP Fallback",
+      "capabilities": [
+        "browser"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "browser-http-fallback",
+        "priority": 30,
+        "role": "degraded_provider_independent_fallback"
+      }
+    },
+    {
+      "id": "resolve-bridge-fallback",
+      "name": "Resolve Bridge Fallback",
+      "capabilities": [
+        "resolve-bridge"
+      ],
+      "status": "available",
+      "metadata": {
+        "mode": "resolve-bridge-fallback",
+        "priority": 32,
+        "role": "degraded_provider_independent_fallback"
+      }
     }
   ]
 }

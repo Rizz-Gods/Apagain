@@ -6,6 +6,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import urllib.request
 
 
 @dataclass
@@ -1372,3 +1373,171 @@ class SocialMarketFallback(_BaseFallback):
             "human_approval": ["external", "financial", "irreversible", "public_claim_with_material_business_impact"],
             "next": [{"capability": "automation-build", "action": "build", "priority": 55}],
         })
+
+class BrowserHTTPFallback(_BaseFallback):
+    id = "browser-http-fallback"
+    READ_COMMANDS = {"open", "get", "read", "snapshot", "find"}
+    META_COMMANDS = {"wait"}
+
+    def supports(self, capability: str) -> bool:
+        return capability == "browser"
+
+    @staticmethod
+    def _url_from(args):
+        for value in args:
+            if str(value).startswith(("http://", "https://")):
+                return str(value)
+        return ""
+
+    @staticmethod
+    def _fetch(url: str) -> tuple[str, str]:
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "OTH-HTTP-Fallback/1.0"},
+            method="GET",
+        )
+        with urllib.request.urlopen(request, timeout=20) as response:
+            raw = response.read(1_500_000)
+            charset = response.headers.get_content_charset() or "utf-8"
+            return raw.decode(charset, errors="replace"), str(response.geturl())
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        command = str(payload.get("command", "")).strip().lower()
+        args = payload.get("args", [])
+        if not isinstance(args, list) or not all(isinstance(x, str) for x in args):
+            return FallbackResult(False, {"fallback": True}, "Browser args must be a string list")
+        if command in self.META_COMMANDS:
+            return FallbackResult(True, {
+                "fallback": True,
+                "command": command,
+                "status": "completed",
+                "browser_ui": False,
+            })
+        if command not in self.READ_COMMANDS:
+            return FallbackResult(False, {
+                "fallback": True,
+                "browser_ui": False,
+                "supported_commands": sorted(self.READ_COMMANDS | self.META_COMMANDS),
+            }, f"HTTP fallback cannot perform browser UI command: {command}")
+        url = self._url_from(args)
+        if not url:
+            return FallbackResult(False, {"fallback": True}, "A URL is required for HTTP fallback")
+        try:
+            text, final_url = self._fetch(url)
+        except Exception as exc:
+            return FallbackResult(False, {"fallback": True, "url": url}, str(exc), retryable=True)
+        title_match = re.search(r"<title[^>]*>(.*?)</title>", text, re.I | re.S)
+        title = re.sub(r"\s+", " ", title_match.group(1)).strip() if title_match else ""
+        if command == "find":
+            pattern = str(args[-1]) if args[-1] != url else ""
+            found = bool(pattern and pattern.lower() in text.lower())
+            return FallbackResult(True, {
+                "fallback": True,
+                "browser_ui": False,
+                "url": final_url,
+                "title": title,
+                "found": found,
+                "match_count": text.lower().count(pattern.lower()) if pattern else 0,
+            })
+        return FallbackResult(True, {
+            "fallback": True,
+            "browser_ui": False,
+            "url": final_url,
+            "title": title,
+            "text": re.sub(r"<[^>]+>", " ", text),
+            "raw_html_bytes": len(text.encode("utf-8")),
+            "mode": "http_read",
+        })
+
+
+class ResolveBridgeFallback(_BaseFallback):
+    id = "resolve-bridge-fallback"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root).resolve()
+        self.state_path = self.root / "data" / "resolve_fallback_state.json"
+        self.project_dir = self.root / "data" / "media" / "resolve_fallback_projects"
+        self.project_dir.mkdir(parents=True, exist_ok=True)
+
+    def supports(self, capability: str) -> bool:
+        return capability == "resolve-bridge"
+
+    def _save(self, data):
+        self.state_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def execute(self, action: str, payload: dict) -> FallbackResult:
+        source = payload.get("input", {})
+        if action == "status":
+            return FallbackResult(True, {
+                "fallback": True,
+                "installed": False,
+                "connected": False,
+                "activation_required": False,
+                "external_scripting_ready": False,
+                "status": "provider_neutral_fallback",
+                "render_capability": "plan_only",
+            })
+        if action == "connect":
+            return FallbackResult(True, {
+                "fallback": True,
+                "status": "provider_neutral_only",
+                "connected": False,
+                "next": ["prepare_project"],
+            })
+        if action == "launch":
+            return FallbackResult(True, {
+                "fallback": True,
+                "status": "external_renderer_required",
+                "launched": False,
+            })
+        if action == "prepare_project":
+            manifest = source.get("manifest") or {}
+            return FallbackResult(True, {
+                "fallback": True,
+                "status": "project_manifest_ready",
+                "project": manifest,
+                "external_renderer_required": True,
+            })
+        if action == "build_project":
+            manifest = source.get("manifest") or {}
+            name = str(manifest.get("project_name") or manifest.get("manifest_id") or "oth-project")
+            safe = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-") or "oth-project"
+            target = self.project_dir / f"{safe}.json"
+            project = {
+                "project_name": name,
+                "timeline": manifest.get("timeline", []),
+                "render": manifest.get("render", {}),
+                "assets": manifest.get("assets", []),
+                "provider_neutral": True,
+                "external_renderer_required": True,
+                "status": "project_plan_ready",
+            }
+            target.write_text(json.dumps(project, indent=2), encoding="utf-8")
+            self._save({"last_project": str(target.relative_to(self.root)), "status": project["status"]})
+            return FallbackResult(True, {
+                "fallback": True,
+                "status": "project_plan_ready",
+                "project_path": str(target.relative_to(self.root)),
+                "external_renderer_required": True,
+            })
+        if action == "render":
+            manifest = source.get("manifest") or {}
+            plan = {
+                "manifest_id": manifest.get("manifest_id"),
+                "render": manifest.get("render", {}),
+                "status": "awaiting_primary_renderer",
+                "rendered": False,
+                "fallback": True,
+            }
+            self._save({"last_render": plan})
+            return FallbackResult(True, plan | {
+                "external_renderer_required": True,
+                "note": "Fallback prepares render intent but never claims a Resolve render occurred.",
+            })
+        if action == "render_status":
+            return FallbackResult(True, {
+                "fallback": True,
+                "status": "provider_neutral",
+                "rendering": False,
+            })
+        return self._unsupported("resolve-bridge", action)

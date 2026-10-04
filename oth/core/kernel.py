@@ -56,6 +56,7 @@ from oth.core.resilient_fallbacks import (
     SocialQueueFallback, SocialActionsFallback,
     SocialAccountsFallback, SocialAutonomyFallback, SocialAutopilotFallback,
     SocialControlFallback, SocialLeadsFallback, SocialMarketFallback,
+    BrowserHTTPFallback, ResolveBridgeFallback,
 )
 
 class OTHKernel:
@@ -248,6 +249,12 @@ class OTHKernel:
             elif mode == "social-market-fallback":
                 self.workers.append(SocialMarketFallback(self.root))
                 modes.add("social-market-fallback")
+            elif mode == "browser-http-fallback":
+                self.workers.append(BrowserHTTPFallback())
+                modes.add("browser-http-fallback")
+            elif mode == "resolve-bridge-fallback":
+                self.workers.append(ResolveBridgeFallback(self.root))
+                modes.add("resolve-bridge-fallback")
             else:
                 self.workers.append(ExternalAgentWorker(agent))
         if "scout" not in modes:

@@ -154,6 +154,18 @@
         "capability": "social-market",
         "action": "prompt"
       }
+    ],
+    "browser": [
+      {
+        "capability": "browser",
+        "action": "command"
+      }
+    ],
+    "resolve-bridge": [
+      {
+        "capability": "resolve-bridge",
+        "action": "status"
+      }
     ]
   }
 }

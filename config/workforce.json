@@ -464,6 +464,22 @@
         "local_execute"
       ],
       "objective": "Generate an inbound-first social strategy and workflow blueprint independently."
+    },
+    "browser-http-fallback": {
+      "department": "ops",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Read public web content through direct HTTP when browser UI automation is unavailable; never pretend to perform UI actions."
+    },
+    "resolve-bridge-fallback": {
+      "department": "media",
+      "permissions": [
+        "read",
+        "local_execute"
+      ],
+      "objective": "Prepare provider-neutral Resolve project/render plans without claiming an external render occurred."
     }
   }
 }
