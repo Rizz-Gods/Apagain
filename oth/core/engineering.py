@@ -5,8 +5,11 @@ import os
 import re
 import shutil
 import subprocess
+import urllib.request
 from pathlib import Path
 from typing import Any
+
+from .model_router import ModelRouter, ModelRoute
 
 
 class EngineeringWorker:
@@ -119,10 +122,40 @@ class EngineeringWorker:
 
         environment = os.environ.copy()
         environment["OTH_OLLAMA_BASE_URL"] = self._ollama_base_url()
-        environment["OTH_OPENCODE_MODEL"] = os.getenv(
-            "OTH_OPENCODE_MODEL",
-            "ollama/qwen2.5-coder:0.5b-instruct-q5_1",
-        )
+        environment["OTH_MODEL_BASE_URL"] = environment["OTH_OLLAMA_BASE_URL"]
+        router = ModelRouter(self.root)
+        route = router.route(task)
+        if route.model.startswith("ollama/"):
+            model_name = route.model.split("/", 1)[1]
+            try:
+                req = urllib.request.Request(
+                    environment["OTH_OLLAMA_BASE_URL"].replace("/v1", "") + "/api/tags"
+                )
+                with urllib.request.urlopen(req, timeout=3) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                installed = {
+                    str(item.get("name", "")).strip()
+                    for item in payload.get("models", [])
+                    if item.get("name")
+                }
+            except Exception:
+                installed = set()
+            if model_name not in installed:
+                fallback = router._profile("local")
+                route = ModelRoute(
+                    "local-fallback",
+                    fallback,
+                    route.complexity,
+                    f"requested {model_name} unavailable locally",
+                )
+        if not route.model:
+            return WorkerResult(
+                False,
+                {"complexity": route.complexity, "reason": route.reason},
+                "model_route_unavailable",
+                retryable=False,
+            )
+        environment["OTH_OPENCODE_MODEL"] = route.model
 
         for cycle in range(self.repair_cycles + 1):
             attempts += 1

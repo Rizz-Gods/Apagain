@@ -1,0 +1,25 @@
+{
+  "models": {
+    "local": {
+      "provider": "ollama",
+      "model": "qwen2.5-coder:0.5b-instruct-q5_1"
+    },
+    "standard": {
+      "provider": "ollama",
+      "model": "qwen2.5-coder:1.5b-instruct"
+    },
+    "strong": {
+      "provider": "ollama",
+      "model": "qwen2.5-coder:7b-instruct"
+    },
+    "frontier": {
+      "provider": "",
+      "model": ""
+    }
+  },
+  "thresholds": {
+    "standard": 0.32,
+    "strong": 0.58,
+    "frontier": 0.82
+  }
+}
