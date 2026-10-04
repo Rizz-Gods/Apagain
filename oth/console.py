@@ -167,6 +167,10 @@ def console_singleton():
         except OSError:
             pass
 
+class StrictHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = False
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "OTHConsole/0.1"
 
@@ -330,7 +334,7 @@ def main():
             print("OTH Console already running")
             return
         print(f"OTH Console online at http://{host}:{port}")
-        ThreadingHTTPServer((host, port), Handler).serve_forever()
+        StrictHTTPServer((host, port), Handler).serve_forever()
 
 if __name__ == "__main__":
     main()
