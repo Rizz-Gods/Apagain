@@ -94,8 +94,31 @@ def test_engineering_scorecard_aggregates_worker_evaluations(tmp_path):
     db.record_agent_result("ollama-engineer", True, None, "2026-01-01T00:00:00+00:00")
     db.record_agent_result("ollama-engineer", False, "failed", "2026-01-02T00:00:00+00:00")
     db.record_agent_result("opencode-engineer", False, "failed", "2026-01-03T00:00:00+00:00")
-    db.record_evaluation("task-1", "engineering", "ollama-engineer", 1.0, True, 1, {}, "ok", "2026-01-01T00:00:00+00:00")
-    db.record_evaluation("task-2", "engineering", "ollama-engineer", 0.0, False, 2, {}, "failed", "2026-01-02T00:00:00+00:00")
+    db.record_evaluation(
+        "task-1", "engineering", "ollama-engineer", 1.0, True, 1,
+        {
+            "provider": "ollama-native",
+            "model": "ollama/qwen2.5-coder:0.5b-instruct-q5_1",
+            "tier": "local",
+            "complexity": 0.2,
+            "implementation_changed": True,
+            "verification_passed": True,
+        },
+        "ok",
+        "2026-01-01T00:00:00+00:00",
+    )
+    db.record_evaluation(
+        "task-2", "engineering", "ollama-engineer", 0.0, False, 2,
+        {
+            "provider": "ollama-native",
+            "model": "ollama/qwen2.5-coder:0.5b-instruct-q5_1",
+            "tier": "local",
+            "implementation_changed": False,
+            "verification_passed": False,
+        },
+        "failed",
+        "2026-01-02T00:00:00+00:00",
+    )
     db.record_evaluation("task-3", "engineering", "opencode-engineer", 0.5, False, 1, {}, "failed", "2026-01-03T00:00:00+00:00")
     rows = [dict(row) for row in db.engineering_scorecard()]
     by_worker = {row["worker_id"]: row for row in rows}
@@ -103,3 +126,7 @@ def test_engineering_scorecard_aggregates_worker_evaluations(tmp_path):
     assert by_worker["ollama-engineer"]["successes"] == 1
     assert by_worker["ollama-engineer"]["failures"] == 1
     assert by_worker["ollama-engineer"]["avg_quality"] == 0.5
+    assert by_worker["ollama-engineer"]["last_provider"] == "ollama-native"
+    assert by_worker["ollama-engineer"]["last_model"] == "ollama/qwen2.5-coder:0.5b-instruct-q5_1"
+    assert by_worker["ollama-engineer"]["last_implementation_changed"] is False
+    assert by_worker["ollama-engineer"]["last_verification_passed"] is False

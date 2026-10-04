@@ -50,11 +50,25 @@ class ExecutionEvaluator:
         else:
             lesson = "all available execution lanes failed; recovery or operator attention required"
 
+        verification = output.get("verification")
+        verification_passed = (
+            bool(verification.get("passed"))
+            if isinstance(verification, dict) and "passed" in verification
+            else None
+        )
         observations = {
             "lane_count": len(lane_history),
             "failed_lanes": sum(1 for item in lane_history if not item.get("success")),
             "output_keys": sorted(output.keys()),
             "error": error,
+            "provider": output.get("provider"),
+            "model": output.get("model"),
+            "tier": output.get("tier"),
+            "complexity": output.get("complexity"),
+            "attempts": output.get("attempts"),
+            "implementation_changed": output.get("implementation_changed"),
+            "implementation_expected": output.get("implementation_expected"),
+            "verification_passed": verification_passed,
         }
         return Evaluation(
             quality=quality,

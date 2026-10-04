@@ -2,7 +2,7 @@
 
 ## Current subsystem: Engineering Execution Reliability
 
-Status: SUBSYSTEM BUILT AND PERSISTED
+Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -38,16 +38,31 @@ Status: SUBSYSTEM BUILT AND PERSISTED
   - `tests/test_engineering_kernel_guard.py`
   - `tests/test_engineering_worker.py`
   - `tests/test_ollama_engineer.py`
+  - `tests/test_pilot_routing.py`
+- Pilot routing hardening:
+  - Explicit technical implementation intent now gets a deterministic `engineering/execute` route before broad media/content matches.
+  - Research-only technical questions remain out of engineering execution.
+- Scorecard metadata persistence:
+  - Engineering evaluations persist provider, model, tier, complexity, implementation-change, verification, and attempt metadata.
+  - `engineering scorecard` exposes latest outcome metadata per worker.
 - Contract documentation:
   - `docs/ENGINEERING_EXECUTION_CONTRACT.md`
 
 ### Verification achieved
 - Focused engineering tests: PASS
-- Full OTH test suite: PASS (current suite completed with exit code 0)
-- Live scorecard command works.
-- Live worker/evaluator history currently includes:
-  - ollama-engineer: 1 recorded run, quality 1.0
-  - opencode-engineer: 2 recorded runs, average quality 0.9375
+- Full OTH test suite: PASS (exit code 0)
+- Live OTH Console mission: PASS
+  - Console-originated mission routed to `engineering/execute`
+  - Root task: `7d236c5d-6a5d-42e9-a569-e111d5686bd8`
+  - Winning worker: `ollama-engineer`
+  - Model: `ollama/qwen2.5-coder:1.5b-instruct`
+  - Provider: `ollama-native`
+  - Complexity: `0.259`
+  - Tool steps: `3`
+  - Implementation change observed: `true`
+  - Verification: full pytest suite passed
+  - Evaluation quality: `1.0`
+- Live scorecard exposes the model/worker outcome metadata above.
 - A real console mission previously exposed a false-positive success bug; this was corrected and committed.
 - Commit pushed:
   - `730720b` — `fix: reject false-positive native engineering success`
@@ -56,7 +71,7 @@ Status: SUBSYSTEM BUILT AND PERSISTED
 1. Passing pytest is NOT proof that an engineering mission was implemented.
 2. Git status alone is NOT proof of change when the repository is already dirty.
 3. The kernel must independently validate engineering evidence.
-4. Pilot semantic routing can still misclassify certain natural-language missions. One validation mission containing the phrase “production code” was routed to media-production; this was quarantined rather than counted as engineering success.
+4. Pilot semantic routing previously misclassified a mission containing “production code”; the deterministic technical-intent guard now routes that class of mission to `engineering/execute`, with regression coverage.
 5. The native and OpenCode workers can now honestly return failure when a requested implementation produces no observable repository change.
 
 ### Runtime
@@ -67,14 +82,10 @@ Status: SUBSYSTEM BUILT AND PERSISTED
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-A final live end-to-end Console validation task was manually submitted directly to the engineering capability. It is currently queued and has not been counted as completed. Do not claim the Engineering Execution subsystem failed because of that queue; the subsystem contract and tests are already complete.
+None. Engineering Execution Reliability is complete and live-validated.
 
 ### Next continuation point
-Continue from the Engineering Execution subsystem and build the next coherent OTH subsystem. Prefer:
-1. fix Pilot capability classification so explicit engineering missions reliably resolve to `engineering/execute`;
-2. then run a real console-originated engineering mission using the fixed routing;
-3. persist model/worker outcome metadata into the scorecard;
-4. only then move to the next subsystem.
+Do not rebuild or re-run the completed Engineering Execution subsystem unless a regression appears. Continue with the next coherent OTH subsystem from this checkpoint, using the engineering worker, evidence guard, evaluator, and scorecard as established infrastructure.
 
 ## Repository
 Primary OTH directory:

@@ -335,7 +335,35 @@ class Database:
             "GROUP BY a.agent_id "
             "ORDER BY reliability DESC, avg_quality DESC LIMIT ?"
         )
-        return self.conn.execute(query, (*worker_ids, limit)).fetchall()
+        rows = self.conn.execute(query, (*worker_ids, limit)).fetchall()
+        enriched = []
+        for row in rows:
+            item = dict(row)
+            latest = self.conn.execute(
+                "SELECT observations, lesson, created_at "
+                "FROM evaluations WHERE worker_id=? AND capability='engineering' "
+                "ORDER BY id DESC LIMIT 1",
+                (row["worker_id"],),
+            ).fetchone()
+            metadata = {}
+            if latest:
+                try:
+                    metadata = json.loads(latest["observations"] or "{}")
+                except (TypeError, ValueError):
+                    metadata = {}
+                item.update({
+                    "last_provider": metadata.get("provider"),
+                    "last_model": metadata.get("model"),
+                    "last_tier": metadata.get("tier"),
+                    "last_complexity": metadata.get("complexity"),
+                    "last_attempts": metadata.get("attempts"),
+                    "last_implementation_changed": metadata.get("implementation_changed"),
+                    "last_verification_passed": metadata.get("verification_passed"),
+                    "last_lesson": latest["lesson"],
+                    "last_evaluation": latest["created_at"],
+                })
+            enriched.append(item)
+        return enriched
 
     def worker_circuit_state(self, worker_id: str, failure_threshold: int = 3, window: int = 12) -> dict[str, Any]:
         rows = self.conn.execute(

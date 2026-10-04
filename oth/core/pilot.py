@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any
 
 
@@ -22,6 +23,19 @@ class PilotPlan:
 class PilotPlanner:
     """Deterministic first-line goal router; specialists remain replaceable workers."""
 
+    ENGINEERING_ACTIONS = (
+        "implement", "refactor", "debug", "repair", "fix", "modify",
+        "develop", "build", "create", "execute", "work on", "add", "remove",
+        "change", "update", "write", "patch", "continue", "finish", "run",
+    )
+    ENGINEERING_HINTS = (
+        "engineering", "code", "repo", "repository", "source", "python",
+        "typescript", "javascript", "golang", "rust", "java", "c++",
+        "program", "software", "api", "backend", "frontend", "module",
+        "package", "function", "class", "file", "pytest", "test suite", "bug",
+        "database", "sql", "schema", "cli", "daemon", "service",
+    )
+
     ROUTES = (
         (("research", "find", "market", "demand", "problem", "opportunit"), "research"),
         (("review", "complaint", "friction"), "review"),
@@ -34,14 +48,28 @@ class PilotPlanner:
         (("implement", "code", "refactor", "debug", "repair", "fix", "execute", "modify", "develop", "build", "create", "work on"), "engineering"),
     )
 
+    @classmethod
+    def _is_explicit_engineering(cls, text: str) -> bool:
+        lowered = text.lower()
+        has_hint = any(hint in lowered for hint in cls.ENGINEERING_HINTS)
+        if not has_hint:
+            return False
+
+        has_action = any(
+            re.search(rf"(?<![a-z]){re.escape(action)}(?![a-z])", lowered)
+            for action in cls.ENGINEERING_ACTIONS
+        )
+        return has_action
+
     def plan(self, instruction: str) -> PilotPlan:
         text = instruction.strip()
         lowered = f" {text.lower()} "
-        route = "reasoning"
-        for keywords, candidate in self.ROUTES:
-            if any(keyword in lowered for keyword in keywords):
-                route = candidate
-                break
+        route = "engineering" if self._is_explicit_engineering(text) else "reasoning"
+        if route != "engineering":
+            for keywords, candidate in self.ROUTES:
+                if any(keyword in lowered for keyword in keywords):
+                    route = candidate
+                    break
 
         if route == "research":
             task = PilotTaskSpec(
