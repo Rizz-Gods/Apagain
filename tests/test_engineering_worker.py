@@ -40,7 +40,9 @@ def test_engineering_worker_runs_verification(monkeypatch, tmp_path):
     result = worker.execute("execute", {"prompt": "implement a safe change"})
     assert result.success
     assert result.output["verification"]["passed"]
-    assert any(command[0] == "opencode" for command in calls)
+    opencode_calls = [command for command in calls if command[0] == "opencode"]
+    assert opencode_calls
+    assert "--dir" not in opencode_calls[0]
 
 
 def test_engineering_fallback_never_claims_execution(tmp_path):
