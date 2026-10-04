@@ -24,6 +24,7 @@ class WorkerContract:
     department: str = "ops"
     objective: str = "Execute assigned OTH work safely and return structured results."
     permissions: tuple[str, ...] = ("read", "local_execute")
+    capability_grants: dict[str, tuple[str, ...]] = field(default_factory=dict)
     memory_scope: str = "task"
     retry: RetryPolicy = field(default_factory=RetryPolicy)
     escalation: EscalationPolicy = field(default_factory=EscalationPolicy)
@@ -92,6 +93,11 @@ class WorkforceRegistry:
         retry_raw.update(override.get("retry", {}) or {})
         escalation_raw = dict(self.defaults.get("escalation", {}) or {})
         escalation_raw.update(override.get("escalation", {}) or {})
+        grants_raw = override.get("capability_grants", {}) or {}
+        capability_grants = {
+            str(capability): self._tuple(permissions)
+            for capability, permissions in grants_raw.items()
+        }
         return WorkerContract(
             worker_id=worker_id,
             department=str(
@@ -108,6 +114,7 @@ class WorkforceRegistry:
                 override.get("permissions"),
                 self._tuple(self.defaults.get("permissions"), ("read", "local_execute")),
             ),
+            capability_grants=capability_grants,
             memory_scope=str(
                 override.get("memory_scope")
                 or self.defaults.get("memory_scope", "task")

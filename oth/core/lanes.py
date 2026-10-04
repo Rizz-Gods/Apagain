@@ -108,8 +108,10 @@ class LaneRouter:
                 configured = worker_id in kernel.workforce.workers
                 if configured:
                     contract = kernel.workforce.contract_for(worker_id)
+                    grants = set(contract.capability_grants.get(target_capability, ()))
                     if any(
                         permission not in contract.permissions
+                        and permission not in grants
                         for permission in capability_contract.required_permissions
                     ):
                         continue

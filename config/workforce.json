@@ -156,6 +156,9 @@
         "read",
         "research"
       ],
+      "capability_grants": {
+        "review-mining": ["browser_read"]
+      },
       "objective": "Mine review and complaint evidence from already-collected research when browser review scraping is unavailable."
     },
     "social-autonomy": {
