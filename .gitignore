@@ -35,3 +35,4 @@ data/media/captions/transcription_smoke.json
 data/media/captions/transcription_smoke.srt
 tools/smoke_transcribe.py
 data/oth-daemon.pid
+data/oth-console.pid
