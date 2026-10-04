@@ -1,6 +1,8 @@
 import json
 import os
+import re
 import sqlite3
+import subprocess
 import uuid
 import urllib.request
 from contextlib import contextmanager
@@ -19,6 +21,30 @@ def model_config():
     base = os.getenv("OTH_MODEL_BASE_URL", "").strip().rstrip("/")
     key = os.getenv("OTH_MODEL_API_KEY", "")
     name = os.getenv("OTH_MODEL_NAME", "").strip()
+    if not base:
+        try:
+            proc = subprocess.run(
+                [
+                    "wsl.exe", "-d", "Arch", "--", "bash", "-lc",
+                    "ip -4 -o addr show eth0 | awk '{print $4}' | cut -d/ -f1",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            ip = next(
+                (
+                    line.strip()
+                    for line in proc.stdout.splitlines()
+                    if re.fullmatch(r"\d+(?:\.\d+){3}", line.strip())
+                ),
+                "",
+            )
+            if ip:
+                base = f"http://{ip}:11434/v1"
+        except Exception:
+            pass
     if not base:
         base = "http://127.0.0.1:11434/v1"
     if not name:
