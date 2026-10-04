@@ -242,14 +242,22 @@ class PilotPlanner:
             ),
         )
 
-    def submit(self, kernel, instruction: str) -> dict[str, Any]:
+    def submit(
+        self,
+        kernel,
+        instruction: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         plan = self.plan(instruction)
         root_ids = []
+        metadata = dict(metadata or {})
         for spec in plan.tasks:
+            payload = dict(spec.payload)
+            payload.update(metadata)
             task = kernel.submit(
                 spec.capability,
                 spec.action,
-                dict(spec.payload),
+                payload,
                 spec.priority,
             )
             root_ids.append(task.id)

@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .mission_state import MissionStateStore
+
 STOPWORDS = {
     "the", "and", "for", "with", "that", "this", "from", "into", "then",
     "have", "will", "your", "what", "when", "where", "which", "about",
@@ -84,8 +86,10 @@ class ConsoleStore:
             except sqlite3.OperationalError:
                 self._fts_enabled = False
         self.db.commit()
+        self.missions = MissionStateStore(self.path)
 
     def close(self):
+        self.missions.close()
         self.db.close()
 
     def create_conversation(self, conversation_id: str, title: str = "New Mission Chat", mission_id: str = "primary"):
@@ -271,6 +275,12 @@ class ConsoleStore:
             if item["id"] not in recent_ids
         ]
         blocks = []
+        mission_context = self.missions.context_for_conversation(conversation_id, memories)
+        if mission_context:
+            blocks.append({
+                "role": "system",
+                "content": mission_context,
+            })
         if memory_rows:
             blocks.append({
                 "role": "system",
@@ -291,4 +301,5 @@ class ConsoleStore:
             "conversations": self.db.execute("SELECT COUNT(*) FROM conversations").fetchone()[0],
             "messages": self.db.execute("SELECT COUNT(*) FROM messages").fetchone()[0],
             "memory_checkpoints": self.db.execute("SELECT COUNT(*) FROM conversation_memory").fetchone()[0],
+            "missions": self.db.execute("SELECT COUNT(*) FROM missions").fetchone()[0],
         }

@@ -1,8 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Engineering Execution Reliability
+## Current subsystem: Mission Continuity
 
 Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
+
+Previous subsystem: Engineering Execution Reliability — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -47,6 +49,17 @@ Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
   - `engineering scorecard` exposes latest outcome metadata per worker.
 - Contract documentation:
   - `docs/ENGINEERING_EXECUTION_CONTRACT.md`
+- Mission Continuity subsystem:
+  - `oth/core/mission_state.py`
+  - Durable mission records in `data/console.db`
+  - Console-to-kernel mission identity propagation
+  - Root-task status aggregation and terminal outcome persistence
+  - Structured mission state injected into model context
+  - API: `GET /api/conversations/{conversation_id}/mission`
+  - Documentation: `docs/MISSION_CONTINUITY.md`
+- Mission Continuity tests:
+  - `tests/test_mission_continuity.py`
+  - `tests/test_mission_kernel_bridge.py`
 
 ### Verification achieved
 - Focused engineering tests: PASS
@@ -63,6 +76,16 @@ Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
   - Verification: full pytest suite passed
   - Evaluation quality: `1.0`
 - Live scorecard exposes the model/worker outcome metadata above.
+- Live Mission Continuity validation: PASS
+  - Console conversation: `7740ba8b-1d11-4aef-b0ae-1b89936d99bf`
+  - Mission: `138c6012-bca4-47f6-878b-8b37e66f3646`
+  - Root task: `cbd5affa-caef-4f51-a3b4-36010ce228b6`
+  - Mission transitioned `queued -> succeeded`
+  - Winning worker: `ollama-engineer`
+  - Model: `ollama/qwen2.5-coder:1.5b-instruct`
+  - Implementation evidence observed: `true`
+  - Full pytest verification: passed
+  - Mission quality: `1.0`
 - A real console mission previously exposed a false-positive success bug; this was corrected and committed.
 - Commit pushed:
   - `730720b` — `fix: reject false-positive native engineering success`
@@ -82,10 +105,10 @@ Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Engineering Execution Reliability is complete and live-validated.
+None. Mission Continuity is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild or re-run the completed Engineering Execution subsystem unless a regression appears. Continue with the next coherent OTH subsystem from this checkpoint, using the engineering worker, evidence guard, evaluator, and scorecard as established infrastructure.
+Do not rebuild Engineering Execution Reliability or Mission Continuity unless a regression appears. Continue with the next coherent OTH subsystem using both as established infrastructure.
 
 ## Repository
 Primary OTH directory:

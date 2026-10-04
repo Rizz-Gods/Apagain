@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .core.console_store import ConsoleStore
+from .core.mission_state import MissionStateStore
 from .core.pilot import PilotPlanner
 from .core.kernel import OTHKernel
 
@@ -114,20 +115,48 @@ def resolve_mission(conversation_id: str, text: str) -> str:
             return candidate
     return text.strip()
 
-def queue_mission(text: str):
+def queue_mission(conversation_id: str, text: str):
+    planner = PilotPlanner()
+    preview = planner.plan(text)
+    mission_store = MissionStateStore(ROOT / "data" / "console.db")
+    mission_id = str(uuid.uuid4())
+    mission_store.create(
+        conversation_id,
+        preview.goal,
+        preview.strategy,
+        mission_id=mission_id,
+    )
     kernel = OTHKernel(ROOT)
     try:
-        planner = PilotPlanner()
-        plan = planner.submit(kernel, text)
+        plan = planner.submit(
+            kernel,
+            text,
+            {
+                "mission_id": mission_id,
+                "conversation_id": conversation_id,
+            },
+        )
+        mission_store.attach_root_tasks(mission_id, plan["root_task_ids"])
         return {
             "queued": True,
+            "mission_id": mission_id,
             "goal": plan["goal"],
             "strategy": plan["strategy"],
             "root_task_ids": plan["root_task_ids"],
             "task_count": plan["task_count"],
         }
+    except Exception as exc:
+        mission_store.update_from_task(
+            mission_id,
+            "",
+            "failed",
+            {"error": str(exc)},
+            task_db=ROOT / "data" / "oth.db",
+        )
+        raise
     finally:
         kernel.close()
+        mission_store.close()
 
 def pilot_fallback(text: str):
     planner = PilotPlanner()
@@ -199,6 +228,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/conversations":
             self.json_response(200, {"items": STORE.list_conversations()})
+            return
+        if self.path.startswith("/api/conversations/") and self.path.endswith("/mission"):
+            conversation_id = self.path.split("/")[3]
+            self.json_response(200, {"items": STORE.missions.for_conversation(conversation_id)})
             return
         if self.path.startswith("/api/conversations/") and self.path.endswith("/messages"):
             conversation_id = self.path.split("/")[3]
@@ -324,7 +357,7 @@ class Handler(BaseHTTPRequestHandler):
 
             if is_mission(text):
                 mission_text = resolve_mission(conversation_id, text)
-                queued = queue_mission(mission_text)
+                queued = queue_mission(conversation_id, mission_text)
                 answer = (
                     "Mission queued into the OTH execution kernel.\n\n"
                     f"Goal: {queued['goal']}\n"

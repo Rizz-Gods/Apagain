@@ -2,6 +2,7 @@ import uuid
 from pathlib import Path
 from .db import Database
 from .models import Task, now_iso
+from .mission_state import MissionStateStore
 from .policy import PolicyGate
 from .registry import Registry
 from .workforce import WorkforceRegistry
@@ -67,6 +68,7 @@ class OTHKernel:
     def __init__(self, root: str | Path):
         self.root = Path(root)
         self.db = Database(self.root / "data" / "oth.db")
+        self.missions = MissionStateStore(self.root / "data" / "console.db")
         self.registry = Registry(
             self.root / "config" / "agents.json",
             self.root / "config" / "skills.json",
@@ -660,6 +662,30 @@ class OTHKernel:
             },
             now_iso(),
         )
+        mission_id = str(stored_payload.get("mission_id") or "").strip()
+        if mission_id:
+            verification = lane_output.get("verification")
+            verification_passed = None
+            if isinstance(verification, dict):
+                if "passed" in verification:
+                    verification_passed = bool(verification["passed"])
+                elif "returncode" in verification:
+                    verification_passed = int(verification["returncode"]) == 0
+            self.missions.update_from_task(
+                mission_id,
+                task_id,
+                effective_status,
+                {
+                    "summary": lane_output.get("summary"),
+                    "provider": lane_output.get("provider"),
+                    "model": lane_output.get("model"),
+                    "error": result.error,
+                    "quality": evaluation.quality,
+                    "implementation_changed": lane_output.get("implementation_changed"),
+                    "verification_passed": verification_passed,
+                },
+                task_db=self.db.path,
+            )
         spawned = []
         if result.success:
             handoffs = task_payload.get("next") or result.output.get("next") or []
@@ -732,4 +758,5 @@ class OTHKernel:
         return [dict(r) for r in self.db.list_tasks()]
 
     def close(self):
+        self.missions.close()
         self.db.close()

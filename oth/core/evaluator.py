@@ -51,11 +51,12 @@ class ExecutionEvaluator:
             lesson = "all available execution lanes failed; recovery or operator attention required"
 
         verification = output.get("verification")
-        verification_passed = (
-            bool(verification.get("passed"))
-            if isinstance(verification, dict) and "passed" in verification
-            else None
-        )
+        if isinstance(verification, dict) and "passed" in verification:
+            verification_passed = bool(verification["passed"])
+        elif isinstance(verification, dict) and "returncode" in verification:
+            verification_passed = int(verification["returncode"]) == 0
+        else:
+            verification_passed = None
         observations = {
             "lane_count": len(lane_history),
             "failed_lanes": sum(1 for item in lane_history if not item.get("success")),
