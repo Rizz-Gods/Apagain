@@ -295,11 +295,40 @@ Previous subsystem: Mission Progress and ETA — complete and live-validated
   - Disposable mission, timeline, audit, and task/event rows were removed after validation.
   - A disposable cleanup helper initially referenced a nonexistent DB method; cleanup was then completed directly and the workspace was rechecked clean.
 
+- Mission Resource Guardrails subsystem:
+  - Durable mission execution limits: `max_tasks` (default 256) and `max_retries` (default 8).
+  - Task creation with a mission ID is blocked when the reachable mission graph already reaches the task cap.
+  - Retry scheduling is blocked when the mission-wide retry cap is exhausted.
+  - Budget exhaustion becomes durable mission timeline state and a critical `mission.budget_exhausted` attention item.
+  - Operator can increase/decrease limits without automatically resuming or dispatching blocked work.
+  - CLI: `python -m oth.cli mission budget <mission_id> [--max-tasks N] [--max-retries N]`.
+  - Console API: `GET/POST /api/missions/{mission_id}/budget`.
+  - Unified Mission Control exposes live budget counts, limits, remaining capacity, and status.
+  - Budget policy changes are recorded in the operator audit ledger.
+  - Documentation: `docs/MISSION_BUDGET.md`.
+
+### Verification achieved
+- Mission Resource Guardrails focused suite: PASS (5/5).
+- Deadline + Budget + Audit + Replay regression suite: PASS (20/20).
+- Full OTH pytest suite after final implementation: PASS (100%, exit code 0, runtime 23.70s).
+- Pycompile and `git diff --check`: PASS.
+- Fixed one pre-existing clock-sensitive deadline test by allowing `set_deadline(..., now=...)` so deterministic watchdog tests are independent of wall-clock time.
+- Live Console budget flow: PASS.
+  - Existing Console/daemon runtime was reconciled and restarted through approved wrappers.
+  - `POST /api/missions/{mission_id}/budget` successfully set `max_tasks=1`.
+  - A second mission task was created as `blocked` when the cap was reached.
+  - Control surface reported `tasks_exhausted` and `mission.budget_exhausted`.
+  - Increasing the cap to 3 restored budget status to `ok` without auto-dispatching the blocked task.
+  - A real failed task with `max_retries=0` remained `failed` and did not schedule a retry.
+  - Retry budget became `retries_exhausted` and surfaced budget attention.
+  - Disposable mission/task/timeline/audit rows were removed after validation.
+
 ### Current uncompleted item
-None. Mission Forensics and Replay is complete and live-validated.
+None. Mission Resource Guardrails is complete and live-validated.
 
 ### Next continuation point
 Do not rebuild the established mission subsystems unless a regression appears. Continue with the next coherent OTH subsystem using the completed layers as infrastructure.
+
 
 
 

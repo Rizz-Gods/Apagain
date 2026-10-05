@@ -259,6 +259,14 @@ class Handler(BaseHTTPRequestHandler):
             )
             self.json_response(200, {"mission_id": mission_id, "items": items})
             return
+        if self.path.startswith("/api/missions/") and self.path.endswith("/budget"):
+            mission_id = self.path.split("/")[3]
+            budget = STORE.missions.budget_for_mission(mission_id, ROOT / "data" / "oth.db")
+            if budget is None:
+                self.json_response(404, {"error": "mission not found", "mission_id": mission_id})
+                return
+            self.json_response(200, {"mission_id": mission_id, "budget": budget})
+            return
         if self.path.startswith("/api/missions/") and self.path.endswith("/audit"):
             mission_id = self.path.split("/")[3]
             mission = STORE.missions.get(mission_id)
@@ -449,6 +457,26 @@ class Handler(BaseHTTPRequestHandler):
                 ROOT / "data" / "oth.db",
             )
             self.json_response(status, {"result": result, "control": snapshot})
+            return
+
+        if self.path.startswith("/api/missions/") and self.path.endswith("/budget"):
+            mission_id = self.path.split("/")[3]
+            try:
+                result = STORE.missions.set_budget(
+                    mission_id,
+                    max_tasks=body.get("max_tasks"),
+                    max_retries=body.get("max_retries"),
+                    actor=str(body.get("actor", "operator")),
+                    task_db=ROOT / "data" / "oth.db",
+                )
+            except (TypeError, ValueError) as exc:
+                self.json_response(400, {"error": str(exc)})
+                return
+            if result.get("status") == "missing":
+                self.json_response(404, result)
+                return
+            snapshot = STORE.missions.control_snapshot(mission_id, ROOT / "data" / "oth.db")
+            self.json_response(200, {"result": result, "budget": snapshot.get("budget") if snapshot else None, "control": snapshot})
             return
 
         if self.path.startswith("/api/missions/") and self.path.endswith("/escalation"):

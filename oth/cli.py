@@ -132,6 +132,11 @@ def main(argv=None):
     escalation_group.add_argument("--warning-before", type=float)
     escalation_group.add_argument("--critical-before", type=float)
     escalation_group.add_argument("--reset", action="store_true")
+    mission_budget = mission_sub.add_parser("budget")
+    mission_budget.add_argument("mission_id")
+    mission_budget.add_argument("--max-tasks", type=int)
+    mission_budget.add_argument("--max-retries", type=int)
+
     attention = sub.add_parser("attention")
     attention_sub = attention.add_subparsers(dest="attention_cmd", required=True)
     attention_list = attention_sub.add_parser("list")
@@ -538,6 +543,23 @@ def main(argv=None):
                 if args.verify:
                     payload["integrity"] = kernel.missions.verify_audit_chain(args.mission_id)
                 print(json.dumps(payload, indent=2))
+            elif args.mission_cmd == "budget":
+                if args.max_tasks is None and args.max_retries is None:
+                    payload = kernel.missions.budget_for_mission(args.mission_id, kernel.db.path)
+                    print(json.dumps(payload or {"status": "missing", "mission_id": args.mission_id}, indent=2))
+                else:
+                    try:
+                        result = kernel.missions.set_budget(
+                            args.mission_id,
+                            max_tasks=args.max_tasks,
+                            max_retries=args.max_retries,
+                            actor="operator",
+                            task_db=kernel.db.path,
+                        )
+                    except ValueError as exc:
+                        print(json.dumps({"status": "invalid", "error": str(exc)}, indent=2))
+                        return
+                    print(json.dumps(result, indent=2))
             elif args.mission_cmd == "replay":
                 print(json.dumps(
                     kernel.missions.replay_for_mission(

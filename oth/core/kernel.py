@@ -331,11 +331,50 @@ class OTHKernel:
             self.workers.append(MediaQA(self.root))
 
     def submit(self, capability: str, action: str, payload: dict, priority: int = 50) -> Task:
-        task = Task(str(uuid.uuid4()), capability, action, payload, priority)
+        task_payload = dict(payload)
+        mission_id = str(task_payload.get("mission_id") or "").strip()
+        status = "queued"
+        budget_block = None
+        if mission_id:
+            decision = self.missions.can_create_task(mission_id, self.db.path)
+            if not decision.get("allowed"):
+                status = "blocked"
+                budget_block = decision
+                task_payload["_budget_blocked"] = True
+                task_payload["_budget_reason"] = decision.get("reason")
+        task = Task(str(uuid.uuid4()), capability, action, task_payload, priority, status=status)
         self.db.add_task(task)
-        self.db.add_event(task.id, "task.queued",
-                          {"capability": capability, "action": action},
-                          task.created_at)
+        if budget_block:
+            self.db.add_event(
+                task.id,
+                "task.budget_exhausted",
+                {
+                    "mission_id": mission_id,
+                    "reason": budget_block.get("reason"),
+                    "budget": budget_block,
+                },
+                task.created_at,
+            )
+            self.missions.add_timeline_event(
+                mission_id,
+                "mission.budget_blocked_task",
+                {"task_id": task.id, "reason": budget_block.get("reason"), "budget": budget_block},
+                task_id=task.id,
+                status="blocked",
+                created_at=task.created_at,
+            )
+            self.missions.update_from_task(
+                mission_id,
+                task.id,
+                "blocked",
+                {"error": budget_block.get("reason"), "budget": budget_block},
+                task_db=self.db.path,
+            )
+            self.missions.update_budget_status(mission_id, self.db.path)
+        else:
+            self.db.add_event(task.id, "task.queued",
+                              {"capability": capability, "action": action},
+                              task.created_at)
         return task
 
     def dispatch(self, task_id: str):
@@ -573,6 +612,7 @@ class OTHKernel:
             stored_payload.get("max_retries", contract.retry.max_attempts)
         )
         retry_scheduled = False
+        retry_budget_blocked = None
 
         # A lane failure is a reason to continue into the next recovery cycle,
         # even when an individual worker reported the error as non-retryable.
@@ -580,23 +620,59 @@ class OTHKernel:
             not result.success
             and int(stored_payload.get("_attempts", 0)) < configured_retries
         ):
-            stored_payload["_attempts"] = int(stored_payload.get("_attempts", 0)) + 1
-            self.db.update_task_payload(task_id, stored_payload, now_iso())
-            self.db.update_task(task_id, "queued", now_iso())
-            self.db.add_event(
-                task_id,
-                "task.retry_scheduled",
-                {
-                    "attempt": stored_payload["_attempts"],
-                    "reason": "lane_exhausted",
-                    "failed_workers": stored_payload.get("_failed_lane_workers", []),
-                },
-                now_iso(),
-            )
-            retry_scheduled = True
+            mission_id_for_budget = str(stored_payload.get("mission_id") or "").strip()
+            if mission_id_for_budget:
+                retry_budget = self.missions.can_retry_task(
+                    mission_id_for_budget,
+                    self.db.path,
+                )
+                if not retry_budget.get("allowed"):
+                    retry_budget_blocked = retry_budget
+                else:
+                    stored_payload["_attempts"] = int(stored_payload.get("_attempts", 0)) + 1
+                    self.db.update_task_payload(task_id, stored_payload, now_iso())
+                    self.db.update_task(task_id, "queued", now_iso())
+                    self.db.add_event(
+                        task_id,
+                        "task.retry_scheduled",
+                        {
+                            "attempt": stored_payload["_attempts"],
+                            "reason": "lane_exhausted",
+                            "failed_workers": stored_payload.get("_failed_lane_workers", []),
+                            "mission_budget": retry_budget,
+                        },
+                        now_iso(),
+                    )
+                    retry_scheduled = True
+            else:
+                stored_payload["_attempts"] = int(stored_payload.get("_attempts", 0)) + 1
+                self.db.update_task_payload(task_id, stored_payload, now_iso())
+                self.db.update_task(task_id, "queued", now_iso())
+                self.db.add_event(
+                    task_id,
+                    "task.retry_scheduled",
+                    {
+                        "attempt": stored_payload["_attempts"],
+                        "reason": "lane_exhausted",
+                        "failed_workers": stored_payload.get("_failed_lane_workers", []),
+                    },
+                    now_iso(),
+                )
+                retry_scheduled = True
 
         if not retry_scheduled:
             self.db.update_task(task_id, status, now_iso())
+            if retry_budget_blocked and mission_id_for_budget:
+                self.db.add_event(
+                    task_id,
+                    "task.budget_exhausted",
+                    {
+                        "reason": retry_budget_blocked.get("reason"),
+                        "budget": retry_budget_blocked,
+                    },
+                    now_iso(),
+                )
+                self.missions.update_budget_status(mission_id_for_budget, self.db.path)
 
         lane_output = dict(result.output or {})
         lane_output["execution_lanes"] = lane_history

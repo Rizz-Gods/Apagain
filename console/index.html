@@ -52,6 +52,7 @@ footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;displ
     <div id="missionStatus" class="control-status status"></div>
   </div>
   <div id="missionMetrics" class="control-grid"></div>
+  <div id="missionBudget" class="small" style="margin-top:8px"></div>
   <div id="missionProgress" class="progress">
     <div class="progress-track"><div id="missionProgressFill" class="progress-fill"></div></div>
     <div class="progress-meta"><span id="missionProgressLabel">0% complete</span><span id="missionEta">ETA unavailable</span></div>
@@ -122,7 +123,7 @@ function renderControl(data){
   const panel=$('#control');
   if(!data || !data.mission){panel.hidden=true;return;}
   panel.hidden=false;
-  const m=data.mission, g=data.graph||{}, counts=g.counts||{}, deadline=data.deadline, escalation=data.escalation, progress=data.progress;
+  const m=data.mission, g=data.graph||{}, counts=g.counts||{}, deadline=data.deadline, escalation=data.escalation, budget=data.budget, progress=data.progress;
   $('#missionGoal').textContent=m.goal || 'Mission';
   const deadlineText=deadline
     ? ' · deadline '+deadline.at+' · '+deadline.status
@@ -136,6 +137,8 @@ function renderControl(data){
   const pct=Math.max(0,Math.min(100,Number(progress?.percent||0)));
   $('#missionProgressFill').style.width=pct+'%';
   $('#missionProgressLabel').textContent=pct.toFixed(1)+'% complete · '+(progress?.completed||0)+'/'+(progress?.total||0)+' terminal';
+  const budgetBox=$('#missionBudget');
+  budgetBox.textContent=budget ? ('Budget '+budget.task_count+'/'+budget.max_tasks+' tasks · '+budget.retry_count+'/'+budget.max_retries+' retries · '+budget.status) : 'Budget unavailable';
   const eta=progress?.eta_seconds;
   $('#missionEta').textContent=eta==null?'ETA unavailable':('ETA ~'+Math.max(0,eta/60).toFixed(1)+' min');
 

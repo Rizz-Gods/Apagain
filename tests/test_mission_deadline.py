@@ -119,6 +119,7 @@ def test_deadline_escalation_transitions_are_durable_and_idempotent(tmp_path):
         missions.set_deadline(
             "mission-escalation",
             "2026-10-05T12:00:00+00:00",
+            now="2026-10-05T11:40:00+00:00",
         )
 
         state = missions.watchdog_for_mission(

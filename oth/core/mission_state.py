@@ -104,6 +104,10 @@ class MissionStateStore:
             ("escalation_warning_seconds", "REAL NOT NULL DEFAULT 900"),
             ("escalation_critical_seconds", "REAL NOT NULL DEFAULT 300"),
             ("escalation_checked_at", "TEXT"),
+            ("max_tasks", "INTEGER NOT NULL DEFAULT 256"),
+            ("max_retries", "INTEGER NOT NULL DEFAULT 8"),
+            ("budget_status", "TEXT NOT NULL DEFAULT 'ok'"),
+            ("budget_checked_at", "TEXT"),
         )
         for column, definition in migrations:
             if column not in existing_columns:
@@ -331,6 +335,15 @@ class MissionStateStore:
                 "severity": "critical",
                 "title": "Task requires operator attention",
                 "detail": str(payload.get("reason") or "Task execution requires attention."),
+            }
+        if kind == "mission.budget_exhausted":
+            return {
+                "severity": "critical",
+                "title": "Mission execution budget exhausted",
+                "detail": (
+                    f"Task limit {payload.get('task_count', 0)}/{payload.get('max_tasks', 0)}; "
+                    f"retry limit {payload.get('retry_count', 0)}/{payload.get('max_retries', 0)}."
+                ),
             }
         if kind == "mission.cancel_requested":
             return {
@@ -639,8 +652,8 @@ class MissionStateStore:
              latest_task_id,latest_outcome,created_at,updated_at,completed_at,
              deadline_at,watchdog_status,watchdog_checked_at,
              escalation_level,escalation_warning_seconds,escalation_critical_seconds,
-             escalation_checked_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             escalation_checked_at,max_tasks,max_retries,budget_status,budget_checked_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 mission_id,
@@ -661,6 +674,10 @@ class MissionStateStore:
                 900.0,
                 300.0,
                 now,
+                256,
+                8,
+                "ok",
+                now,
             ),
         )
         self.db.commit()
@@ -680,11 +697,158 @@ class MissionStateStore:
         )
         return self.get(mission_id) or {}
 
+    def budget_for_mission(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+    ) -> dict[str, Any] | None:
+        mission = self.get(mission_id)
+        if mission is None:
+            return None
+        graph = self.graph_for_mission(mission_id, task_db)
+        task_count = len(graph.get("nodes", []))
+        task_limit = max(1, int(mission.get("max_tasks", 256)))
+        task_retry_count = 0
+        path = Path(task_db)
+        if path.exists():
+            try:
+                conn = sqlite3.connect(path)
+                graph_task_ids = [str(node["id"]) for node in graph.get("nodes", [])]
+                if graph_task_ids:
+                    placeholders = ",".join("?" for _ in graph_task_ids)
+                    row = conn.execute(
+                        "SELECT COUNT(*) AS count FROM events "
+                        "WHERE kind='task.retry_scheduled' AND task_id IN (%s)" % placeholders,
+                        tuple(graph_task_ids),
+                    ).fetchone()
+                    task_retry_count = int(row[0] or 0)
+                conn.close()
+            except sqlite3.Error:
+                task_retry_count = 0
+        retry_limit = max(0, int(mission.get("max_retries", 8)))
+        tasks_exhausted = task_count >= task_limit
+        retries_exhausted = task_retry_count >= retry_limit if retry_limit >= 0 else False
+        if tasks_exhausted and retries_exhausted:
+            status = "tasks_and_retries_exhausted"
+        elif tasks_exhausted:
+            status = "tasks_exhausted"
+        elif retries_exhausted:
+            status = "retries_exhausted"
+        else:
+            status = "ok"
+        return {
+            "status": status,
+            "task_count": task_count,
+            "max_tasks": task_limit,
+            "retry_count": task_retry_count,
+            "max_retries": retry_limit,
+            "remaining_tasks": max(0, task_limit - task_count),
+            "remaining_retries": max(0, retry_limit - task_retry_count),
+            "checked_at": now_iso(),
+        }
+
+    def can_create_task(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+    ) -> dict[str, Any]:
+        budget = self.budget_for_mission(mission_id, task_db)
+        if budget is None:
+            return {"allowed": False, "reason": "mission_missing", "mission_id": mission_id}
+        if budget["task_count"] >= budget["max_tasks"]:
+            return {"allowed": False, "reason": "max_tasks_exhausted", **budget}
+        return {"allowed": True, **budget}
+
+    def can_retry_task(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+    ) -> dict[str, Any]:
+        budget = self.budget_for_mission(mission_id, task_db)
+        if budget is None:
+            return {"allowed": False, "reason": "mission_missing", "mission_id": mission_id}
+        if budget["retry_count"] >= budget["max_retries"]:
+            return {"allowed": False, "reason": "max_retries_exhausted", **budget}
+        return {"allowed": True, **budget}
+
+    def set_budget(
+        self,
+        mission_id: str,
+        max_tasks: int | None = None,
+        max_retries: int | None = None,
+        actor: str = "operator",
+        task_db: str | Path | None = None,
+    ) -> dict[str, Any]:
+        mission = self.get(mission_id)
+        if mission is None:
+            return {"status": "missing", "mission_id": mission_id}
+        tasks_limit = mission.get("max_tasks", 256) if max_tasks is None else int(max_tasks)
+        retries_limit = mission.get("max_retries", 8) if max_retries is None else int(max_retries)
+        if tasks_limit < 1:
+            raise ValueError("max_tasks must be >= 1")
+        if retries_limit < 0:
+            raise ValueError("max_retries must be >= 0")
+        now = now_iso()
+        self.db.execute(
+            "UPDATE missions SET max_tasks=?, max_retries=?, budget_status='ok', budget_checked_at=?, updated_at=? WHERE id=?",
+            (tasks_limit, retries_limit, now, now, mission_id),
+        )
+        self.db.commit()
+        self.add_timeline_event(
+            mission_id,
+            "mission.budget_policy_set",
+            {"max_tasks": tasks_limit, "max_retries": retries_limit},
+            status=mission["status"],
+            created_at=now,
+        )
+        self.add_audit_event(
+            mission_id,
+            "mission.budget.policy_set",
+            actor=actor,
+            payload={"max_tasks": tasks_limit, "max_retries": retries_limit},
+        )
+        if task_db is not None:
+            self.update_budget_status(mission_id, task_db)
+        return self.get(mission_id) or {}
+
+    def update_budget_status(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+    ) -> dict[str, Any] | None:
+        budget = self.budget_for_mission(mission_id, task_db)
+        if budget is None:
+            return None
+        now = now_iso()
+        previous = self.get(mission_id) or {}
+        previous_status = previous.get("budget_status", "ok")
+        if budget["status"] != previous_status:
+            self.db.execute(
+                "UPDATE missions SET budget_status=?, budget_checked_at=?, updated_at=? WHERE id=?",
+                (budget["status"], now, now, mission_id),
+            )
+        else:
+            self.db.execute(
+                "UPDATE missions SET budget_checked_at=? WHERE id=?",
+                (now, mission_id),
+            )
+        self.db.commit()
+        if budget["status"] != previous_status and budget["status"] != "ok":
+            self.add_timeline_event(
+                mission_id,
+                "mission.budget_exhausted",
+                budget,
+                status=previous.get("status"),
+                created_at=now,
+            )
+        return budget
+
     def set_deadline(
         self,
         mission_id: str,
         deadline_at: str | None,
         actor: str = "operator",
+        now: str | None = None,
     ) -> dict[str, Any]:
         mission = self.get(mission_id)
         if mission is None:
@@ -701,7 +865,7 @@ class MissionStateStore:
                 raise ValueError("deadline_at must include a timezone offset")
             normalized = parsed.astimezone(timezone.utc).isoformat()
 
-        now = now_iso()
+        effective_now = now or now_iso()
         self.db.execute(
             """
             UPDATE missions
@@ -709,7 +873,7 @@ class MissionStateStore:
                 escalation_level=?, escalation_checked_at=?, updated_at=?
             WHERE id=?
             """,
-            (normalized, "ok", now, "normal", now, now, mission_id),
+            (normalized, "ok", effective_now, "normal", effective_now, effective_now, mission_id),
         )
         self.db.commit()
         self.add_timeline_event(
@@ -717,9 +881,9 @@ class MissionStateStore:
             "mission.deadline_cleared" if normalized is None else "mission.deadline_set",
             {"deadline_at": normalized},
             status=mission["status"],
-            created_at=now,
+            created_at=effective_now,
         )
-        self.watchdog_for_mission(mission_id, task_db=None, now=now)
+        self.watchdog_for_mission(mission_id, task_db=None, now=effective_now)
         result = self.get(mission_id) or {}
         self.add_audit_event(
             mission_id,
@@ -1538,6 +1702,7 @@ class MissionStateStore:
                 "warning_before_seconds": mission.get("escalation_warning_seconds", 900.0),
                 "critical_before_seconds": mission.get("escalation_critical_seconds", 300.0),
             }
+        budget = self.update_budget_status(mission_id, task_db) or self.budget_for_mission(mission_id, task_db)
         attention = self.attention_for_mission(mission_id, limit=50)
         audit = self.audit_for_mission(mission_id, limit=50)
         audit_integrity = self.verify_audit_chain(mission_id)
@@ -1551,6 +1716,7 @@ class MissionStateStore:
             "mission": mission,
             "deadline": deadline,
             "escalation": escalation,
+            "budget": budget,
             "progress": self.progress_for_mission(mission_id, task_db),
             "attention": attention,
             "attention_open_count": len(open_attention),
@@ -1618,6 +1784,10 @@ class MissionStateStore:
             "escalation_warning_seconds": row["escalation_warning_seconds"] if "escalation_warning_seconds" in row.keys() else 900.0,
             "escalation_critical_seconds": row["escalation_critical_seconds"] if "escalation_critical_seconds" in row.keys() else 300.0,
             "escalation_checked_at": row["escalation_checked_at"] if "escalation_checked_at" in row.keys() else None,
+            "max_tasks": row["max_tasks"] if "max_tasks" in row.keys() else 256,
+            "max_retries": row["max_retries"] if "max_retries" in row.keys() else 8,
+            "budget_status": row["budget_status"] if "budget_status" in row.keys() else "ok",
+            "budget_checked_at": row["budget_checked_at"] if "budget_checked_at" in row.keys() else None,
         }
 
     def _graph_summary(self, root_ids: list[str]) -> str:
