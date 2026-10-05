@@ -479,6 +479,62 @@ class MissionStateStore:
             "counts": counts,
         }
 
+    def control_snapshot(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+        timeline_limit: int = 120,
+    ) -> dict[str, Any] | None:
+        """Return the unified operator view of one mission without executing actions."""
+        self.reconcile(task_db)
+        mission = self.get(mission_id)
+        if mission is None:
+            return None
+        graph = self.graph_for_mission(mission_id, task_db)
+        timeline = self.timeline_for_mission(
+            mission_id,
+            limit=max(1, min(int(timeline_limit), 200)),
+            task_db=task_db,
+        )
+        counts = dict(graph.get("counts") or {})
+        failed = int(counts.get("failed", 0))
+        blocked = int(counts.get("blocked", 0))
+        actions = [
+            {
+                "action": "approve",
+                "enabled": blocked > 0,
+                "task_ids": [
+                    str(node["id"])
+                    for node in graph.get("nodes", [])
+                    if node.get("status") == "blocked"
+                ],
+                "reason": "Blocked tasks require operator approval." if blocked else "No blocked tasks.",
+            },
+            {
+                "action": "resume",
+                "enabled": failed > 0,
+                "task_ids": [
+                    str(node["id"])
+                    for node in graph.get("nodes", [])
+                    if node.get("status") == "failed"
+                ],
+                "reason": "Failed tasks can be explicitly resumed; policy gates still apply." if failed else "No failed tasks.",
+            },
+            {
+                "action": "refresh",
+                "enabled": True,
+                "task_ids": [],
+                "reason": "Reconcile mission state and reload the control surface.",
+            },
+        ]
+        return {
+            "mission_id": mission_id,
+            "mission": mission,
+            "graph": graph,
+            "timeline": timeline,
+            "actions": actions,
+        }
+
     def context_for_conversation(self, conversation_id: str, limit: int = 6) -> str:
         missions = self.for_conversation(conversation_id, limit)
         if not missions:
