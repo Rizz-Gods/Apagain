@@ -240,6 +240,17 @@ class Handler(BaseHTTPRequestHandler):
             ]
             self.json_response(200, {"items": payload})
             return
+        if self.path.startswith("/api/missions/") and self.path.endswith("/control"):
+            mission_id = self.path.split("/")[3]
+            snapshot = STORE.missions.control_snapshot(
+                mission_id,
+                ROOT / "data" / "oth.db",
+            )
+            if snapshot is None:
+                self.json_response(404, {"error": "mission not found", "mission_id": mission_id})
+                return
+            self.json_response(200, snapshot)
+            return
         if self.path.startswith("/api/missions/") and self.path.endswith("/timeline"):
             mission_id = self.path.split("/")[3]
             items = STORE.missions.timeline_for_mission(
@@ -351,6 +362,43 @@ class Handler(BaseHTTPRequestHandler):
             self.json_response(400, {"error": f"invalid json: {exc}"})
             return
 
+        if self.path.startswith("/api/missions/") and self.path.endswith("/control"):
+            mission_id = self.path.split("/")[3]
+            action = str(body.get("action", "")).strip().lower()
+            task_ids = body.get("task_ids")
+            if task_ids is not None and not isinstance(task_ids, list):
+                self.json_response(400, {"error": "task_ids must be a list"})
+                return
+            task_ids = [str(item) for item in task_ids] if task_ids is not None else None
+            kernel = OTHKernel(ROOT)
+            try:
+                if action == "approve":
+                    result = kernel.approve_mission(mission_id, task_ids=task_ids)
+                elif action == "resume":
+                    result = kernel.resume_mission(
+                        mission_id,
+                        task_ids=task_ids,
+                        approve_external=bool(body.get("approve_external", False)),
+                    )
+                elif action == "refresh":
+                    result = STORE.missions.reconcile(ROOT / "data" / "oth.db")
+                else:
+                    self.json_response(400, {
+                        "error": "unsupported mission control action",
+                        "action": action,
+                        "supported": ["approve", "resume", "refresh"],
+                    })
+                    return
+            finally:
+                kernel.close()
+            snapshot = STORE.missions.control_snapshot(mission_id, ROOT / "data" / "oth.db")
+            if snapshot is None:
+                self.json_response(404, {"error": "mission not found", "mission_id": mission_id})
+                return
+            status = 200 if not (isinstance(result, dict) and result.get("status") == "missing") else 404
+            self.json_response(status, {"action": action, "result": result, "control": snapshot})
+            return
+
         if self.path.startswith("/api/missions/") and self.path.endswith("/resume"):
             mission_id = self.path.split("/")[3]
             task_ids = body.get("task_ids")
@@ -361,7 +409,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 result = kernel.resume_mission(
                     mission_id,
-                    task_ids=[str(item) for item in task_ids] if task_ids else None,
+                    task_ids=[str(item) for item in task_ids] if task_ids is not None else None,
                     approve_external=bool(body.get("approve_external", False)),
                 )
             finally:
