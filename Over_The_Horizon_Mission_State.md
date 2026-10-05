@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission Control Plane / Operator Command Center
+## Current subsystem: Mission Cancellation and Graceful Intervention
 
-Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
+Status: IMPLEMENTED — LIVE VALIDATION PENDING
 
-Previous subsystem: Mission Observability and Execution Timeline — complete and live-validated
+Previous subsystem: Mission Control Plane / Operator Command Center — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -105,6 +105,13 @@ Previous subsystem: Mission Observability and Execution Timeline — complete an
   - Approve/resume actions delegate to the existing kernel safety gates; no second execution path was introduced.
   - Console UI now exposes mission status, graph counters, recent timeline, approval, and resume controls.
   - Documentation: `docs/MISSION_CONTROL.md`.
+- Mission Cancellation and Graceful Intervention subsystem:
+  - Queued and blocked mission tasks can be cancelled immediately.
+  - Running tasks receive a durable graceful cancellation request; the current synchronous worker is never force-terminated.
+  - Mission aggregation recognizes `cancelled` as terminal.
+  - Unified Mission Control now exposes a `cancel` action.
+  - CLI: `python -m oth.cli mission cancel ...`.
+  - Documentation: `docs/MISSION_CANCELLATION.md`.
 
 ### Verification achieved
 - Focused engineering tests: PASS
@@ -162,6 +169,10 @@ Previous subsystem: Mission Observability and Execution Timeline — complete an
   - Live Console timeline endpoint returned 9 correlated events for a real disposable mission.
   - Mission lifecycle events and underlying task events were both present.
   - Disposable mission/task/timeline records were removed after the check.
+- Mission Cancellation and Graceful Intervention verification status:
+  - Focused regression coverage added in `tests/test_mission_cancellation.py`.
+  - Remote implementation is committed on `main`.
+  - Full pytest and live Console cancellation validation are pending because the Windows runtime disconnected during implementation.
 - Mission Control Plane verification: PASS
   - Focused Mission Control regression tests: PASS (2/2).
   - Full OTH test suite: PASS (100%, exit code 0, runtime ~40.6s).
@@ -191,10 +202,10 @@ Previous subsystem: Mission Observability and Execution Timeline — complete an
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Mission Control Plane is complete and live-validated.
+Mission Cancellation and Graceful Intervention live validation against the real Windows Console/daemon runtime.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, or Mission Control Plane unless a regression appears. Continue with the next coherent OTH subsystem using all eight as established infrastructure.
+First live-validate Mission Cancellation and Graceful Intervention when the Windows runtime is reachable. Then continue with the next coherent OTH subsystem. Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, or Mission Control Plane unless a regression appears.
 
 ## Repository
 Primary OTH directory:
