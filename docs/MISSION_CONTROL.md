@@ -60,10 +60,12 @@ The control plane is an orchestration/read surface, not a second execution engin
 
 ## Verification state
 
-Focused regression coverage was added in `tests/test_mission_control.py` for:
-
-- failed missions exposing a resume action,
-- blocked missions exposing an approval action,
-- graph/timeline/action composition.
-
-The local Windows runtime could not be reconnected during this checkpoint, so live Console HTTP validation and a full pytest run remain pending.
+- Focused Mission Control regression tests: PASS (2/2).
+- Full OTH pytest suite: PASS (100%, exit code 0, runtime ~40.6s).
+- Real Console `GET /api/missions/{mission_id}/control`: PASS.
+- Real Console `POST /api/missions/{mission_id}/control` approval: PASS.
+- A blocked disposable mission exposed the exact approval-eligible task.
+- Approval requeued that exact task and persisted `approved_by=operator`.
+- The returned control snapshot reflected updated mission, graph, timeline, and action availability.
+- Disposable mission/task/timeline records were deleted after validation.
+- Runtime duplicate-process cleanup was completed; the authoritative PID-file processes remain.

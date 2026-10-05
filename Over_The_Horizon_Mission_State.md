@@ -2,7 +2,7 @@
 
 ## Current subsystem: Mission Control Plane / Operator Command Center
 
-Status: IMPLEMENTED — LIVE VALIDATION PENDING
+Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
 
 Previous subsystem: Mission Observability and Execution Timeline — complete and live-validated
 
@@ -98,7 +98,7 @@ Previous subsystem: Mission Observability and Execution Timeline — complete an
   - CLI: `python -m oth.cli mission timeline ...`
   - Timeline reads are bounded to 500 events and do not execute actions.
   - Documentation: `docs/MISSION_OBSERVABILITY.md`
-  - Mission Control Plane / Operator Command Center subsystem:
+- Mission Control Plane / Operator Command Center subsystem:
   - Unified HTTP read surface: `GET /api/missions/{mission_id}/control`.
   - Unified HTTP action surface: `POST /api/missions/{mission_id}/control`.
   - Control snapshot composes durable mission state, reachable graph, correlated timeline, and available operator actions.
@@ -162,10 +162,16 @@ Previous subsystem: Mission Observability and Execution Timeline — complete an
   - Live Console timeline endpoint returned 9 correlated events for a real disposable mission.
   - Mission lifecycle events and underlying task events were both present.
   - Disposable mission/task/timeline records were removed after the check.
-- Mission Control Plane verification status:
-  - Focused regression coverage added in `tests/test_mission_control.py`.
-  - Remote implementation is committed on `main`.
-  - Full pytest and live Console HTTP validation are pending because the connected Windows runtime is currently offline.
+- Mission Control Plane verification: PASS
+  - Focused Mission Control regression tests: PASS (2/2).
+  - Full OTH test suite: PASS (100%, exit code 0, runtime ~40.6s).
+  - Real Console HTTP `GET /api/missions/{mission_id}/control`: PASS.
+  - Real Console HTTP `POST /api/missions/{mission_id}/control` approval: PASS.
+  - Blocked disposable mission exposed the exact approval-eligible task.
+  - Approval requeued that exact task and persisted `approved_by=operator`.
+  - Unified control response returned updated mission, graph, timeline, and action availability.
+  - Disposable mission/task/timeline records were removed after validation.
+  - Console and daemon duplicate-process cleanup was performed; the authoritative PID-file processes remain.
 - A real console mission previously exposed a false-positive success bug; this was corrected and committed.
 - Commit pushed:
   - `730720b` — `fix: reject false-positive native engineering success`
@@ -185,10 +191,10 @@ Previous subsystem: Mission Observability and Execution Timeline — complete an
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-Mission Control Plane live validation against the real Windows Console/daemon runtime.
+None. Mission Control Plane is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, or Mission Observability unless a regression appears. First live-validate Mission Control Plane when the Windows runtime is reachable; then continue with the next coherent OTH subsystem using all eight as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, or Mission Control Plane unless a regression appears. Continue with the next coherent OTH subsystem using all eight as established infrastructure.
 
 ## Repository
 Primary OTH directory:
