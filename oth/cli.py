@@ -136,6 +136,11 @@ def main(argv=None):
     mission_budget.add_argument("mission_id")
     mission_budget.add_argument("--max-tasks", type=int)
     mission_budget.add_argument("--max-retries", type=int)
+    mission_policy = mission_sub.add_parser("policy")
+    mission_policy.add_argument("mission_id")
+    mission_policy.add_argument("--external-approval", choices=["required", "not-required"])
+    mission_policy.add_argument("--financial-approval", choices=["required", "not-required"])
+    mission_policy.add_argument("--reason", default="operator_policy_update")
 
     attention = sub.add_parser("attention")
     attention_sub = attention.add_subparsers(dest="attention_cmd", required=True)
@@ -543,6 +548,24 @@ def main(argv=None):
                 if args.verify:
                     payload["integrity"] = kernel.missions.verify_audit_chain(args.mission_id)
                 print(json.dumps(payload, indent=2))
+            elif args.mission_cmd == "policy":
+                if args.external_approval is None and args.financial_approval is None:
+                    print(json.dumps(kernel.missions.policy_for_mission(args.mission_id) or {"status": "missing", "mission_id": args.mission_id}, indent=2))
+                else:
+                    result = kernel.missions.set_policy(
+                        args.mission_id,
+                        external_actions_require_approval=(
+                            args.external_approval == "required"
+                            if args.external_approval is not None else None
+                        ),
+                        financial_actions_require_approval=(
+                            args.financial_approval == "required"
+                            if args.financial_approval is not None else None
+                        ),
+                        actor="operator",
+                        reason=args.reason,
+                    )
+                    print(json.dumps(result or {"status": "missing", "mission_id": args.mission_id}, indent=2))
             elif args.mission_cmd == "budget":
                 if args.max_tasks is None and args.max_retries is None:
                     payload = kernel.missions.budget_for_mission(args.mission_id, kernel.db.path)

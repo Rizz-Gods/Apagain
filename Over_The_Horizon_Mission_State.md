@@ -323,11 +323,40 @@ Previous subsystem: Mission Progress and ETA — complete and live-validated
   - Retry budget became `retries_exhausted` and surfaced budget attention.
   - Disposable mission/task/timeline/audit rows were removed after validation.
 
+- Mission Policy Versioning and Governance subsystem:
+  - Durable mission-scoped governance revisions in `mission_policy_revisions`.
+  - Each revision pins approval, deadline, escalation, budget, and cancellation semantics.
+  - Immutable revision number + SHA-256 policy hash.
+  - Existing missions are backfilled into revision 1.
+  - Deadline, escalation, budget, approval, and cancellation policy mutations create new revisions.
+  - Kernel task policy checks use the mission-pinned approval policy instead of silently following the live global policy file.
+  - Every `task.policy_evaluated` event records the active policy revision and hash.
+  - Existing operator audit records automatically carry the active policy revision/hash.
+  - CLI: `python -m oth.cli mission policy <mission_id>`.
+  - Console API: `GET/POST /api/missions/{mission_id}/policy`.
+  - Unified Mission Control exposes current policy revision/hash; forensic replay exposes revision history.
+  - Documentation: `docs/MISSION_POLICY.md`.
+
+### Verification achieved
+- Mission Policy Versioning focused suite: PASS (6/6 after governance-evidence coverage).
+- Adjacent policy/budget/deadline/audit/replay regression: PASS (25/25 before final evidence addition; 21/21 after evidence addition).
+- Full OTH pytest suite after final governance implementation: PASS (100%, exit code 0, runtime 44.35s).
+- Pycompile and `git diff --check`: PASS.
+- Live governance validation: PASS.
+  - Revision 1 required external approval and blocked a disposable external-risk task.
+  - Revision 2 disabled that approval requirement.
+  - A subsequent external-risk task succeeded.
+  - `task.policy_evaluated` recorded revision 1/hash for the blocked decision and revision 2/hash for the allowed decision.
+  - Control exposed current policy revision/hash.
+  - Replay exposed policy revision history alongside mission and audit evidence.
+  - Audit integrity remained valid.
+  - Disposable mission/task/revision/timeline/audit rows were removed after validation.
+
 ### Current uncompleted item
-None. Mission Resource Guardrails is complete and live-validated.
+None. Mission Policy Versioning and Governance is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild the established mission subsystems unless a regression appears. Continue with the next coherent OTH subsystem using the completed layers as infrastructure.
+Do not rebuild the established mission subsystems unless a regression appears. Continue with the next coherent OTH subsystem using the completed governance, control, evidence, and guardrail layers as infrastructure.
 
 
 

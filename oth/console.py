@@ -267,6 +267,15 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.json_response(200, {"mission_id": mission_id, "budget": budget})
             return
+        if self.path.startswith("/api/missions/") and self.path.endswith("/policy"):
+            mission_id = self.path.split("/")[3]
+            policy = STORE.missions.policy_for_mission(mission_id)
+            revisions = STORE.missions.policy_revisions_for_mission(mission_id, limit=100)
+            if policy is None:
+                self.json_response(404, {"error": "mission not found", "mission_id": mission_id})
+                return
+            self.json_response(200, {"mission_id": mission_id, "current": policy, "revisions": revisions})
+            return
         if self.path.startswith("/api/missions/") and self.path.endswith("/audit"):
             mission_id = self.path.split("/")[3]
             mission = STORE.missions.get(mission_id)
@@ -457,6 +466,26 @@ class Handler(BaseHTTPRequestHandler):
                 ROOT / "data" / "oth.db",
             )
             self.json_response(status, {"result": result, "control": snapshot})
+            return
+
+        if self.path.startswith("/api/missions/") and self.path.endswith("/policy"):
+            mission_id = self.path.split("/")[3]
+            try:
+                result = STORE.missions.set_policy(
+                    mission_id,
+                    external_actions_require_approval=body.get("external_actions_require_approval"),
+                    financial_actions_require_approval=body.get("financial_actions_require_approval"),
+                    cancellation_mode=body.get("cancellation_mode"),
+                    actor=str(body.get("actor", "operator")),
+                    reason=str(body.get("reason", "operator_policy_update")),
+                )
+            except (TypeError, ValueError) as exc:
+                self.json_response(400, {"error": str(exc)})
+                return
+            if result is None:
+                self.json_response(404, {"error": "mission not found", "mission_id": mission_id})
+                return
+            self.json_response(200, {"result": result, "policy": STORE.missions.policy_for_mission(mission_id)})
             return
 
         if self.path.startswith("/api/missions/") and self.path.endswith("/budget"):

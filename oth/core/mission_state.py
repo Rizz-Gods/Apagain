@@ -90,6 +90,19 @@ class MissionStateStore:
                 ON mission_audit(mission_id, id);
             CREATE INDEX IF NOT EXISTS idx_mission_audit_action
                 ON mission_audit(action, id);
+            CREATE TABLE IF NOT EXISTS mission_policy_revisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mission_id TEXT NOT NULL,
+                revision INTEGER NOT NULL,
+                policy_json TEXT NOT NULL,
+                policy_hash TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(mission_id, revision)
+            );
+            CREATE INDEX IF NOT EXISTS idx_mission_policy_mission
+                ON mission_policy_revisions(mission_id, revision);
             """
         )
         existing_columns = {
@@ -108,6 +121,11 @@ class MissionStateStore:
             ("max_retries", "INTEGER NOT NULL DEFAULT 8"),
             ("budget_status", "TEXT NOT NULL DEFAULT 'ok'"),
             ("budget_checked_at", "TEXT"),
+            ("policy_revision", "INTEGER NOT NULL DEFAULT 1"),
+            ("policy_hash", "TEXT"),
+            ("approval_external", "INTEGER NOT NULL DEFAULT 1"),
+            ("approval_financial", "INTEGER NOT NULL DEFAULT 1"),
+            ("cancellation_mode", "TEXT NOT NULL DEFAULT 'graceful'"),
         )
         for column, definition in migrations:
             if column not in existing_columns:
@@ -115,9 +133,277 @@ class MissionStateStore:
                     f"ALTER TABLE missions ADD COLUMN {column} {definition}"
                 )
         self.db.commit()
+        self._backfill_policy_revisions()
 
     def close(self) -> None:
         self.db.close()
+
+    def _default_policy_config(self) -> dict[str, Any]:
+        path = self.path.parent.parent / "config" / "policies.json"
+        default = {
+            "external_actions_require_approval": True,
+            "financial_actions_require_approval": True,
+        }
+        if not path.exists():
+            return default
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            return {**default, **loaded} if isinstance(loaded, dict) else default
+        except (OSError, ValueError, TypeError):
+            return default
+
+    def _policy_document(
+        self,
+        mission: dict[str, Any],
+        approval: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        approval = approval or {
+            "external_actions_require_approval": bool(mission.get("approval_external", True)),
+            "financial_actions_require_approval": bool(mission.get("approval_financial", True)),
+        }
+        return {
+            "approval": {
+                "external_actions_require_approval": bool(
+                    approval.get("external_actions_require_approval", True)
+                ),
+                "financial_actions_require_approval": bool(
+                    approval.get("financial_actions_require_approval", True)
+                ),
+            },
+            "deadline": {"deadline_at": mission.get("deadline_at")},
+            "escalation": {
+                "warning_before_seconds": float(
+                    mission.get("escalation_warning_seconds", 900.0)
+                ),
+                "critical_before_seconds": float(
+                    mission.get("escalation_critical_seconds", 300.0)
+                ),
+            },
+            "budget": {
+                "max_tasks": int(mission.get("max_tasks", 256)),
+                "max_retries": int(mission.get("max_retries", 8)),
+            },
+            "cancellation": {
+                "mode": str(mission.get("cancellation_mode", "graceful")),
+                "operator_only": True,
+            },
+        }
+
+    def _backfill_policy_revisions(self) -> None:
+        rows = self.db.execute(
+            "SELECT * FROM missions ORDER BY created_at ASC"
+        ).fetchall()
+        defaults = self._default_policy_config()
+        for row in rows:
+            mission = self._row(row)
+            existing = self.db.execute(
+                "SELECT revision, policy_hash "
+                "FROM mission_policy_revisions WHERE mission_id=? "
+                "ORDER BY revision DESC LIMIT 1",
+                (mission["id"],),
+            ).fetchone()
+            if existing:
+                continue
+            policy = self._policy_document(mission, defaults)
+            policy_hash = hashlib.sha256(
+                json.dumps(
+                    policy,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ).encode("utf-8")
+            ).hexdigest()
+            created_at = mission["created_at"] or now_iso()
+            self.db.execute(
+                "INSERT OR IGNORE INTO mission_policy_revisions "
+                "(mission_id,revision,policy_json,policy_hash,actor,reason,created_at) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (
+                    mission["id"],
+                    1,
+                    json.dumps(policy, ensure_ascii=False),
+                    policy_hash,
+                    "migration",
+                    "initial_migration",
+                    created_at,
+                ),
+            )
+            self.db.execute(
+                "UPDATE missions SET policy_revision=1, policy_hash=?, "
+                "approval_external=?, approval_financial=?, cancellation_mode=? "
+                "WHERE id=?",
+                (
+                    policy_hash,
+                    int(policy["approval"]["external_actions_require_approval"]),
+                    int(policy["approval"]["financial_actions_require_approval"]),
+                    policy["cancellation"]["mode"],
+                    mission["id"],
+                ),
+            )
+        self.db.commit()
+
+    def _record_policy_revision(
+        self,
+        mission_id: str,
+        actor: str = "system",
+        reason: str = "policy_mutation",
+    ) -> dict[str, Any] | None:
+        mission = self.get(mission_id)
+        if mission is None:
+            return None
+        current = self.db.execute(
+            "SELECT COALESCE(MAX(revision), 0) AS revision "
+            "FROM mission_policy_revisions WHERE mission_id=?",
+            (mission_id,),
+        ).fetchone()
+        revision = int(current["revision"] or 0) + 1
+        policy = self._policy_document(mission)
+        policy_hash = hashlib.sha256(
+            json.dumps(
+                policy,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+        ).hexdigest()
+        created_at = now_iso()
+        self.db.execute(
+            "INSERT INTO mission_policy_revisions "
+            "(mission_id,revision,policy_json,policy_hash,actor,reason,created_at) "
+            "VALUES(?,?,?,?,?,?,?)",
+            (
+                mission_id,
+                revision,
+                json.dumps(policy, ensure_ascii=False),
+                policy_hash,
+                str(actor),
+                str(reason),
+                created_at,
+            ),
+        )
+        self.db.execute(
+            "UPDATE missions SET policy_revision=?, policy_hash=?, updated_at=? WHERE id=?",
+            (revision, policy_hash, created_at, mission_id),
+        )
+        self.db.commit()
+        self.add_timeline_event(
+            mission_id,
+            "mission.policy_revision_created",
+            {"revision": revision, "policy_hash": policy_hash, "reason": reason},
+            status=mission["status"],
+            created_at=created_at,
+        )
+        return self.policy_for_mission(mission_id)
+
+    def policy_for_mission(self, mission_id: str) -> dict[str, Any] | None:
+        mission = self.get(mission_id)
+        if mission is None:
+            return None
+        row = self.db.execute(
+            "SELECT * FROM mission_policy_revisions "
+            "WHERE mission_id=? AND revision=?",
+            (mission_id, int(mission.get("policy_revision", 1))),
+        ).fetchone()
+        if row is None:
+            self._backfill_policy_revisions()
+            row = self.db.execute(
+                "SELECT * FROM mission_policy_revisions "
+                "WHERE mission_id=? ORDER BY revision DESC LIMIT 1",
+                (mission_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "mission_id": mission_id,
+            "revision": int(row["revision"]),
+            "hash": row["policy_hash"],
+            "policy": json.loads(row["policy_json"] or "{}"),
+            "actor": row["actor"],
+            "reason": row["reason"],
+            "created_at": row["created_at"],
+        }
+
+    def policy_revisions_for_mission(
+        self,
+        mission_id: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        rows = self.db.execute(
+            "SELECT * FROM mission_policy_revisions "
+            "WHERE mission_id=? ORDER BY revision DESC LIMIT ?",
+            (mission_id, limit),
+        ).fetchall()
+        return [
+            {
+                "id": int(row["id"]),
+                "mission_id": row["mission_id"],
+                "revision": int(row["revision"]),
+                "hash": row["policy_hash"],
+                "policy": json.loads(row["policy_json"] or "{}"),
+                "actor": row["actor"],
+                "reason": row["reason"],
+                "created_at": row["created_at"],
+            }
+            for row in reversed(rows)
+        ]
+
+    def set_policy(
+        self,
+        mission_id: str,
+        external_actions_require_approval: bool | None = None,
+        financial_actions_require_approval: bool | None = None,
+        cancellation_mode: str | None = None,
+        actor: str = "operator",
+        reason: str = "operator_policy_update",
+    ) -> dict[str, Any] | None:
+        mission = self.get(mission_id)
+        if mission is None:
+            return None
+        current = self.policy_for_mission(mission_id)
+        approval = dict(
+            (current or {}).get("policy", {}).get("approval", {})
+        )
+        if external_actions_require_approval is not None:
+            approval["external_actions_require_approval"] = bool(
+                external_actions_require_approval
+            )
+        if financial_actions_require_approval is not None:
+            approval["financial_actions_require_approval"] = bool(
+                financial_actions_require_approval
+            )
+        mode = cancellation_mode or mission.get("cancellation_mode", "graceful")
+        if mode not in {"graceful"}:
+            raise ValueError("cancellation_mode must be 'graceful'")
+        self.db.execute(
+            "UPDATE missions SET approval_external=?, approval_financial=?, "
+            "cancellation_mode=? WHERE id=?",
+            (
+                int(approval.get("external_actions_require_approval", True)),
+                int(approval.get("financial_actions_require_approval", True)),
+                mode,
+                mission_id,
+            ),
+        )
+        self.db.commit()
+        revision = self._record_policy_revision(
+            mission_id,
+            actor=actor,
+            reason=reason,
+        )
+        self.add_audit_event(
+            mission_id,
+            "mission.policy.changed",
+            actor=actor,
+            payload={
+                "external_actions_require_approval": bool(approval.get("external_actions_require_approval", True)),
+                "financial_actions_require_approval": bool(approval.get("financial_actions_require_approval", True)),
+                "cancellation_mode": mode,
+                "reason": reason,
+                "revision": revision.get("revision") if revision else None,
+            },
+        )
+        return revision
 
     def add_audit_event(
         self,
@@ -131,7 +417,14 @@ class MissionStateStore:
     ) -> dict[str, Any]:
         """Append one tamper-evident operator/system decision record."""
         event_time = created_at or now_iso()
-        normalized_payload = payload or {}
+        normalized_payload = dict(payload or {})
+        mission_row = self.db.execute(
+            "SELECT policy_revision, policy_hash FROM missions WHERE id=?",
+            (mission_id,),
+        ).fetchone()
+        if mission_row:
+            normalized_payload.setdefault("policy_revision", mission_row["policy_revision"])
+            normalized_payload.setdefault("policy_hash", mission_row["policy_hash"])
         previous = self.db.execute(
             "SELECT entry_hash FROM mission_audit ORDER BY id DESC LIMIT 1"
         ).fetchone()
@@ -555,6 +848,7 @@ class MissionStateStore:
         )
         audit = self.audit_for_mission(mission_id, limit=limit)
         integrity = self.verify_audit_chain(mission_id)
+        policy_revisions = self.policy_revisions_for_mission(mission_id, limit=limit)
 
         replay: list[dict[str, Any]] = []
         for item in timeline:
@@ -566,6 +860,23 @@ class MissionStateStore:
                 "kind": item.get("kind"),
                 "status": item.get("status"),
                 "payload": item.get("payload") or {},
+                "created_at": item.get("created_at"),
+            })
+        for item in policy_revisions:
+            replay.append({
+                "source": "policy",
+                "id": item.get("id"),
+                "mission_id": mission_id,
+                "task_id": None,
+                "kind": "policy.revision",
+                "status": "active" if item.get("revision") == mission.get("policy_revision") else "historical",
+                "payload": {
+                    "revision": item.get("revision"),
+                    "hash": item.get("hash"),
+                    "actor": item.get("actor"),
+                    "reason": item.get("reason"),
+                    "policy": item.get("policy") or {},
+                },
                 "created_at": item.get("created_at"),
             })
         for item in audit:
@@ -617,8 +928,11 @@ class MissionStateStore:
             "mission": mission,
             "graph": graph,
             "audit_integrity": integrity,
+            "policy": self.policy_for_mission(mission_id),
+            "policy_revisions": policy_revisions,
             "audit_count": len(audit),
             "timeline_count": len(timeline),
+            "policy_revision_count": len(policy_revisions),
             "replay_count": len(replay),
             "summary": {
                 "first_event_at": first_seen,
@@ -652,8 +966,9 @@ class MissionStateStore:
              latest_task_id,latest_outcome,created_at,updated_at,completed_at,
              deadline_at,watchdog_status,watchdog_checked_at,
              escalation_level,escalation_warning_seconds,escalation_critical_seconds,
-             escalation_checked_at,max_tasks,max_retries,budget_status,budget_checked_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             escalation_checked_at,max_tasks,max_retries,budget_status,budget_checked_at,
+             policy_revision,policy_hash,approval_external,approval_financial,cancellation_mode)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 mission_id,
@@ -678,6 +993,11 @@ class MissionStateStore:
                 8,
                 "ok",
                 now,
+                1,
+                None,
+                int(bool(self._default_policy_config().get("external_actions_require_approval", True))),
+                int(bool(self._default_policy_config().get("financial_actions_require_approval", True))),
+                "graceful",
             ),
         )
         self.db.commit()
@@ -695,6 +1015,7 @@ class MissionStateStore:
             payload={"goal": goal, "strategy": strategy},
             created_at=now,
         )
+        self._record_policy_revision(mission_id, actor="system", reason="mission_created")
         return self.get(mission_id) or {}
 
     def budget_for_mission(
@@ -809,6 +1130,7 @@ class MissionStateStore:
         )
         if task_db is not None:
             self.update_budget_status(mission_id, task_db)
+        self._record_policy_revision(mission_id, actor=actor, reason="budget_policy_changed")
         return self.get(mission_id) or {}
 
     def update_budget_status(
@@ -892,6 +1214,7 @@ class MissionStateStore:
             payload={"deadline_at": normalized},
             result="success",
         )
+        self._record_policy_revision(mission_id, actor=actor, reason="deadline_changed")
         return result
 
     def set_escalation_policy(
@@ -948,6 +1271,7 @@ class MissionStateStore:
             },
             result="success",
         )
+        self._record_policy_revision(mission_id, actor=actor, reason="escalation_policy_changed")
         return result
 
     def watchdog_for_mission(
@@ -1706,6 +2030,7 @@ class MissionStateStore:
         attention = self.attention_for_mission(mission_id, limit=50)
         audit = self.audit_for_mission(mission_id, limit=50)
         audit_integrity = self.verify_audit_chain(mission_id)
+        policy = self.policy_for_mission(mission_id)
         open_attention = self.attention_for_mission(
             mission_id,
             limit=200,
@@ -1722,6 +2047,7 @@ class MissionStateStore:
             "attention_open_count": len(open_attention),
             "audit": audit,
             "audit_integrity": audit_integrity,
+            "policy": policy,
             "graph": graph,
             "timeline": timeline,
             "actions": actions,
@@ -1788,6 +2114,11 @@ class MissionStateStore:
             "max_retries": row["max_retries"] if "max_retries" in row.keys() else 8,
             "budget_status": row["budget_status"] if "budget_status" in row.keys() else "ok",
             "budget_checked_at": row["budget_checked_at"] if "budget_checked_at" in row.keys() else None,
+            "policy_revision": row["policy_revision"] if "policy_revision" in row.keys() else 1,
+            "policy_hash": row["policy_hash"] if "policy_hash" in row.keys() else None,
+            "approval_external": bool(row["approval_external"]) if "approval_external" in row.keys() else True,
+            "approval_financial": bool(row["approval_financial"]) if "approval_financial" in row.keys() else True,
+            "cancellation_mode": row["cancellation_mode"] if "cancellation_mode" in row.keys() else "graceful",
         }
 
     def _graph_summary(self, root_ids: list[str]) -> str:

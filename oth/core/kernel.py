@@ -404,7 +404,29 @@ class OTHKernel:
             task_payload["risk"] = capability_contract.risk
         if row["capability"] == "social-actions" and row["action"] in {"publish_text", "publish_video"}:
             task_payload["risk"] = "external"
-        decision = self.policy.check(task_payload)
+        mission_id = str(stored_payload.get("mission_id") or "").strip()
+        mission_policy = self.missions.policy_for_mission(mission_id) if mission_id else None
+        policy_config = None
+        policy_revision = None
+        policy_hash = None
+        if mission_policy:
+            policy_config = mission_policy.get("policy", {}).get("approval", {})
+            policy_revision = mission_policy.get("revision")
+            policy_hash = mission_policy.get("hash")
+        decision = self.policy.check(task_payload, config=policy_config)
+        self.db.add_event(
+            task_id,
+            "task.policy_evaluated",
+            {
+                "decision": "allowed" if decision.allowed else "blocked",
+                "reason": decision.reason,
+                "risk": task_payload.get("risk", "safe"),
+                "policy_revision": policy_revision,
+                "policy_hash": policy_hash,
+                "mission_id": mission_id or None,
+            },
+            now_iso(),
+        )
         if not decision.allowed:
             now = now_iso()
             self.db.update_task(task_id, "blocked", now)
