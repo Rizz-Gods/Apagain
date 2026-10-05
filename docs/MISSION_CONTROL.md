@@ -27,11 +27,12 @@ Supported actions:
 
 - `approve` — delegates to `OTHKernel.approve_mission()`.
 - `resume` — delegates to `OTHKernel.resume_mission()`; external and financial policy gates remain enforced.
+- `cancel` — delegates to `OTHKernel.cancel_mission()`; queued/blocked tasks cancel immediately while running tasks receive a graceful cancellation request.
 - `refresh` — reconciles the mission and reloads the control snapshot.
 
 Optional fields:
 
-`task_ids`: restrict approval or resume to selected mission nodes.
+`task_ids`: restrict approval, resume, or cancellation to selected mission nodes.
 
 `approve_external`: explicitly authorize external/financial failed-task resume when the existing kernel policy requires it.
 
@@ -56,7 +57,8 @@ The control plane is an orchestration/read surface, not a second execution engin
 - Reads reconcile state but do not execute worker tasks.
 - Approval is explicit.
 - Resume preserves the existing external/financial risk gate.
-- No stop/cancel semantics were invented before the kernel has a durable cancellation model.
+- Cancellation is graceful: it never force-terminates a running worker.
+- Running-task cancellation is represented as a durable request until the synchronous worker returns.
 
 ## Verification state
 
@@ -69,3 +71,5 @@ The control plane is an orchestration/read surface, not a second execution engin
 - The returned control snapshot reflected updated mission, graph, timeline, and action availability.
 - Disposable mission/task/timeline records were deleted after validation.
 - Runtime duplicate-process cleanup was completed; the authoritative PID-file processes remain.
+
+Detailed cancellation contract: docs/MISSION_CANCELLATION.md
