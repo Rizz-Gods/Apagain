@@ -110,6 +110,10 @@ def main(argv=None):
     mission_timeline = mission_sub.add_parser("timeline")
     mission_timeline.add_argument("mission_id")
     mission_timeline.add_argument("--limit", type=int, default=200)
+    mission_cancel = mission_sub.add_parser("cancel")
+    mission_cancel.add_argument("mission_id")
+    mission_cancel.add_argument("--task-id", action="append")
+    mission_cancel.add_argument("--reason", default="operator_cancel")
     opp = sub.add_parser("opportunities")
     opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
     opp_list = opp_sub.add_parser("list")
@@ -451,6 +455,15 @@ def main(argv=None):
                     kernel.approve_mission(
                         args.mission_id,
                         task_ids=args.task_id,
+                    ),
+                    indent=2,
+                ))
+            elif args.mission_cmd == "cancel":
+                print(json.dumps(
+                    kernel.cancel_mission(
+                        args.mission_id,
+                        task_ids=args.task_id,
+                        reason=args.reason,
                     ),
                     indent=2,
                 ))
