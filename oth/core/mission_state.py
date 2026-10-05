@@ -55,6 +55,24 @@ class MissionStateStore:
             );
             CREATE INDEX IF NOT EXISTS idx_mission_timeline_mission
                 ON mission_timeline(mission_id, id);
+            CREATE TABLE IF NOT EXISTS mission_attention (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mission_id TEXT NOT NULL,
+                task_id TEXT,
+                severity TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                title TEXT NOT NULL,
+                detail TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                created_at TEXT NOT NULL,
+                acknowledged_at TEXT,
+                acknowledged_by TEXT,
+                dedupe_key TEXT NOT NULL UNIQUE
+            );
+            CREATE INDEX IF NOT EXISTS idx_mission_attention_mission
+                ON mission_attention(mission_id, status, id);
+            CREATE INDEX IF NOT EXISTS idx_mission_attention_status
+                ON mission_attention(status, id);
             """
         )
         existing_columns = {
@@ -110,7 +128,178 @@ class MissionStateStore:
             "SELECT id, mission_id, task_id, kind, status, payload, created_at "
             "FROM mission_timeline WHERE rowid=last_insert_rowid()"
         ).fetchone()
-        return self._timeline_row(row)
+        event = self._timeline_row(row)
+        self._create_attention_from_event(event)
+        return event
+
+    def _create_attention_from_event(self, event: dict[str, Any]) -> None:
+        spec = self._attention_spec(event)
+        if spec is None:
+            return
+        dedupe_key = f"{event['mission_id']}|timeline:{event.get('id')}"
+        self.db.execute(
+            """
+            INSERT OR IGNORE INTO mission_attention
+            (mission_id,task_id,severity,kind,title,detail,status,created_at,dedupe_key)
+            VALUES(?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                event["mission_id"],
+                event.get("task_id"),
+                spec["severity"],
+                event["kind"],
+                spec["title"],
+                spec["detail"],
+                "open",
+                event["created_at"],
+                dedupe_key,
+            ),
+        )
+        self.db.commit()
+
+    @staticmethod
+    def _attention_spec(event: dict[str, Any]) -> dict[str, str] | None:
+        kind = str(event.get("kind") or "")
+        payload = event.get("payload") or {}
+        if kind == "mission.escalation_warning":
+            seconds = payload.get("seconds_to_deadline")
+            return {
+                "severity": "warning",
+                "title": "Mission approaching deadline",
+                "detail": f"About {max(0.0, float(seconds or 0.0)):.0f}s remain before the deadline.",
+            }
+        if kind == "mission.escalation_critical":
+            seconds = payload.get("seconds_to_deadline")
+            return {
+                "severity": "critical",
+                "title": "Mission deadline is critical",
+                "detail": f"About {max(0.0, float(seconds or 0.0)):.0f}s remain before the deadline.",
+            }
+        if kind == "mission.deadline_exceeded":
+            return {
+                "severity": "critical",
+                "title": "Mission deadline exceeded",
+                "detail": f"Deadline {payload.get('deadline_at') or 'unknown'} has passed.",
+            }
+        if kind == "task.approval_required":
+            return {
+                "severity": "critical",
+                "title": "Task requires approval",
+                "detail": str(payload.get("reason") or "Operator approval is required."),
+            }
+        if kind == "task.escalation_required":
+            return {
+                "severity": "critical",
+                "title": "Task requires operator attention",
+                "detail": str(payload.get("reason") or "Task execution requires attention."),
+            }
+        if kind == "mission.cancel_requested":
+            return {
+                "severity": "warning",
+                "title": "Mission cancellation requested",
+                "detail": "Running task cancellation was requested and will complete gracefully.",
+            }
+        if kind == "task.cancel_requested":
+            return {
+                "severity": "warning",
+                "title": "Task cancellation requested",
+                "detail": "The running task received a graceful cancellation request.",
+            }
+        if kind == "mission.task_updated" and event.get("status") == "failed":
+            return {
+                "severity": "critical",
+                "title": "Mission task failed",
+                "detail": str(payload.get("outcome", {}).get("error") or "A mission task failed."),
+            }
+        if kind == "mission.task_updated" and event.get("status") == "blocked":
+            return {
+                "severity": "critical",
+                "title": "Mission task blocked",
+                "detail": str(payload.get("outcome", {}).get("error") or "A mission task is blocked."),
+            }
+        return None
+
+    def attention_for_mission(
+        self,
+        mission_id: str,
+        limit: int = 50,
+        include_acknowledged: bool = False,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 200))
+        query = (
+            "SELECT * FROM mission_attention WHERE mission_id=? "
+            + ("" if include_acknowledged else "AND status='open' ")
+            + "ORDER BY id DESC LIMIT ?"
+        )
+        rows = self.db.execute(query, (mission_id, limit)).fetchall()
+        return [self._attention_row(row) for row in reversed(rows)]
+
+    def list_attention(
+        self,
+        limit: int = 100,
+        mission_id: str | None = None,
+        include_acknowledged: bool = False,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        clauses = []
+        params: list[Any] = []
+        if mission_id:
+            clauses.append("mission_id=?")
+            params.append(mission_id)
+        if not include_acknowledged:
+            clauses.append("status='open'")
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        rows = self.db.execute(
+            "SELECT * FROM mission_attention" + where + " ORDER BY id DESC LIMIT ?",
+            tuple(params) + (limit,),
+        ).fetchall()
+        return [self._attention_row(row) for row in reversed(rows)]
+
+    def acknowledge_attention(
+        self,
+        attention_id: int,
+        acknowledged_by: str = "operator",
+    ) -> dict[str, Any]:
+        row = self.db.execute(
+            "SELECT * FROM mission_attention WHERE id=?",
+            (int(attention_id),),
+        ).fetchone()
+        if row is None:
+            return {"status": "missing", "attention_id": int(attention_id)}
+        if row["status"] == "acknowledged":
+            return self._attention_row(row)
+        acknowledged_at = now_iso()
+        self.db.execute(
+            """
+            UPDATE mission_attention
+            SET status='acknowledged', acknowledged_at=?, acknowledged_by=?
+            WHERE id=?
+            """,
+            (acknowledged_at, acknowledged_by, int(attention_id)),
+        )
+        self.db.commit()
+        return self._attention_row(
+            self.db.execute(
+                "SELECT * FROM mission_attention WHERE id=?",
+                (int(attention_id),),
+            ).fetchone()
+        )
+
+    @staticmethod
+    def _attention_row(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": int(row["id"]),
+            "mission_id": row["mission_id"],
+            "task_id": row["task_id"],
+            "severity": row["severity"],
+            "kind": row["kind"],
+            "title": row["title"],
+            "detail": row["detail"],
+            "status": row["status"],
+            "created_at": row["created_at"],
+            "acknowledged_at": row["acknowledged_at"],
+            "acknowledged_by": row["acknowledged_by"],
+        }
 
     def timeline_for_mission(
         self,
@@ -1050,12 +1239,20 @@ class MissionStateStore:
                 "warning_before_seconds": mission.get("escalation_warning_seconds", 900.0),
                 "critical_before_seconds": mission.get("escalation_critical_seconds", 300.0),
             }
+        attention = self.attention_for_mission(mission_id, limit=50)
+        open_attention = self.attention_for_mission(
+            mission_id,
+            limit=200,
+            include_acknowledged=False,
+        )
         return {
             "mission_id": mission_id,
             "mission": mission,
             "deadline": deadline,
             "escalation": escalation,
             "progress": self.progress_for_mission(mission_id, task_db),
+            "attention": attention,
+            "attention_open_count": len(open_attention),
             "graph": graph,
             "timeline": timeline,
             "actions": actions,

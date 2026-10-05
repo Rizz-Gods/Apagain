@@ -30,6 +30,7 @@ footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;displ
 .timeline-item{display:flex;gap:8px;align-items:baseline;font-size:12px;padding:7px 9px;border:1px solid #20262e;border-radius:8px}
 .timeline-item .kind{font-weight:700}.timeline-item .time{color:#697581;white-space:nowrap}
 .notice{margin-top:8px;padding:8px 10px;border:1px solid #3a2f1f;border-radius:8px;background:#15120e;color:#d8c08b;font-size:12px}
+.attention{margin-top:10px;display:grid;gap:6px}.attention-item{padding:9px 10px;border:1px solid #2a3139;border-radius:9px;background:#11161b}.attention-line{display:flex;justify-content:space-between;gap:8px}.attention-title{font-weight:700}.attention-severity{font-size:10px;text-transform:uppercase;letter-spacing:.08em}.attention-detail{font-size:12px;color:#a8b1b9;margin-top:4px}.attention-ack{margin-top:6px}
 @media(max-width:900px){.control-grid{grid-template-columns:repeat(3,minmax(80px,1fr))}}
 </style>
 </head>
@@ -56,6 +57,7 @@ footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;displ
     <div class="progress-meta"><span id="missionProgressLabel">0% complete</span><span id="missionEta">ETA unavailable</span></div>
   </div>
   <div id="missionActions" class="control-actions"></div>
+  <div id="missionAttention" class="attention"></div>
   <div id="missionNotice"></div>
   <div id="missionTimeline" class="timeline"></div>
 </section>
@@ -131,6 +133,27 @@ function renderControl(data){
   $('#missionProgressLabel').textContent=pct.toFixed(1)+'% complete · '+(progress?.completed||0)+'/'+(progress?.total||0)+' terminal';
   const eta=progress?.eta_seconds;
   $('#missionEta').textContent=eta==null?'ETA unavailable':('ETA ~'+Math.max(0,eta/60).toFixed(1)+' min');
+
+  const attentionBox=$('#missionAttention'); attentionBox.innerHTML='';
+  (data.attention||[]).filter(item=>item.status==='open').slice().reverse().forEach(item=>{
+    const card=document.createElement('div'); card.className='attention-item';
+    const line=document.createElement('div'); line.className='attention-line';
+    const title=document.createElement('span'); title.className='attention-title'; title.textContent=item.title;
+    const sev=document.createElement('span'); sev.className='attention-severity'; sev.textContent=item.severity;
+    line.append(title,sev);
+    const detail=document.createElement('div'); detail.className='attention-detail'; detail.textContent=item.detail;
+    const ack=document.createElement('button'); ack.className='attention-ack'; ack.textContent='Acknowledge';
+    ack.onclick=async()=>{
+      await api('/api/attention/'+item.id+'/acknowledge',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({acknowledged_by:'operator'})
+      });
+      await refreshMissionControl(currentMissionId);
+    };
+    card.append(line,detail,ack);
+    attentionBox.appendChild(card);
+  });
 
   const metrics=$('#missionMetrics'); metrics.innerHTML='';
   [['Total',counts.total||0],['Queued',counts.queued||0],['Running',counts.running||0],['Blocked',counts.blocked||0],['Failed',counts.failed||0],['Cancelled',counts.cancelled||0]].forEach(([k,v])=>metrics.appendChild(metric(k,v)));

@@ -271,6 +271,29 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.json_response(200, {"mission_id": mission_id, "progress": progress})
             return
+        if self.path == "/api/attention":
+            items = STORE.missions.list_attention(
+                limit=100,
+                include_acknowledged=False,
+            )
+            self.json_response(200, {
+                "items": items,
+                "open_count": len(items),
+            })
+            return
+        if self.path.startswith("/api/missions/") and self.path.endswith("/attention"):
+            mission_id = self.path.split("/")[3]
+            items = STORE.missions.attention_for_mission(
+                mission_id,
+                limit=100,
+                include_acknowledged=False,
+            )
+            self.json_response(200, {
+                "mission_id": mission_id,
+                "items": items,
+                "open_count": len(items),
+            })
+            return
         if self.path.startswith("/api/conversations/") and self.path.endswith("/messages"):
             conversation_id = self.path.split("/")[3]
             self.json_response(200, {"items": STORE.messages(conversation_id)})
@@ -426,6 +449,20 @@ class Handler(BaseHTTPRequestHandler):
                 ROOT / "data" / "oth.db",
             )
             self.json_response(200, {"result": result, "control": snapshot})
+            return
+
+        if self.path.startswith("/api/attention/") and self.path.endswith("/acknowledge"):
+            attention_id = self.path.split("/")[3]
+            try:
+                result = STORE.missions.acknowledge_attention(
+                    int(attention_id),
+                    acknowledged_by=str(body.get("acknowledged_by", "operator")),
+                )
+            except (TypeError, ValueError) as exc:
+                self.json_response(400, {"error": str(exc)})
+                return
+            status = 200 if result.get("status") != "missing" else 404
+            self.json_response(status, {"result": result})
             return
 
         if self.path.startswith("/api/missions/") and self.path.endswith("/control"):

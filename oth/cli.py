@@ -125,6 +125,15 @@ def main(argv=None):
     escalation_group.add_argument("--warning-before", type=float)
     escalation_group.add_argument("--critical-before", type=float)
     escalation_group.add_argument("--reset", action="store_true")
+    attention = sub.add_parser("attention")
+    attention_sub = attention.add_subparsers(dest="attention_cmd", required=True)
+    attention_list = attention_sub.add_parser("list")
+    attention_list.add_argument("--mission-id")
+    attention_list.add_argument("--limit", type=int, default=50)
+    attention_list.add_argument("--all", action="store_true")
+    attention_ack = attention_sub.add_parser("ack")
+    attention_ack.add_argument("attention_id", type=int)
+    attention_ack.add_argument("--by", default="operator")
     opp = sub.add_parser("opportunities")
     opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
     opp_list = opp_sub.add_parser("list")
@@ -528,6 +537,23 @@ def main(argv=None):
                     ),
                     indent=2,
                 ))
+            return
+        if args.cmd == "attention":
+            if args.attention_cmd == "list":
+                print(json.dumps(
+                    kernel.missions.list_attention(
+                        limit=args.limit,
+                        mission_id=args.mission_id,
+                        include_acknowledged=args.all,
+                    ),
+                    indent=2,
+                ))
+            elif args.attention_cmd == "ack":
+                result = kernel.missions.acknowledge_attention(
+                    args.attention_id,
+                    acknowledged_by=args.by,
+                )
+                print(json.dumps(result, indent=2))
             return
         if args.cmd == "opportunities":
             rows = (kernel.db.top_opportunities(args.limit)

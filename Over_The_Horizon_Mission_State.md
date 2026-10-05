@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission Progress and ETA
+## Current subsystem: Mission Attention Inbox
 
-Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
+Status: IMPLEMENTED — FOCUSED-TESTED; FULL AND LIVE VALIDATION IN PROGRESS
 
-Previous subsystem: Mission SLA Escalation — complete and live-validated
+Previous subsystem: Mission Progress and ETA — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -211,6 +211,17 @@ Previous subsystem: Mission SLA Escalation — complete and live-validated
   - Disposable validation mission/task/timeline rows were removed after validation.
   - Console was restarted through the intended VBS startup path.
   - Documentation: docs/MISSION_PROGRESS.md.
+- Mission Attention Inbox verification: PASS
+  - Focused attention suite: PASS (3/3).
+  - Full OTH pytest suite: PASS (100%, exit code 0, runtime 43.77s).
+  - Live Console created a critical deadline attention item.
+  - Global attention inbox exposed the item.
+  - Unified mission control exposed the same open attention.
+  - Live acknowledgment persisted acknowledged_by=operator.
+  - Acknowledged item disappeared from open global and mission queues.
+  - Disposable mission/timeline/attention rows were removed after validation.
+  - Console and daemon were restarted through their approved wrapper paths.
+  - Documentation: docs/MISSION_ATTENTION.md.
 - Mission Control Plane verification: PASS
   - Focused Mission Control regression tests: PASS (2/2).
   - Full OTH test suite: PASS (100%, exit code 0, runtime ~40.6s).
@@ -240,10 +251,10 @@ Previous subsystem: Mission SLA Escalation — complete and live-validated
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Mission SLA Escalation is complete and live-validated.
+None. Mission Attention Inbox is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, Mission Control Plane, Mission Cancellation and Graceful Intervention, Mission Deadline and Watchdog, or Mission SLA Escalation unless a regression appears. Continue with the next coherent OTH subsystem using all eleven as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, Mission Control Plane, Mission Cancellation and Graceful Intervention, Mission Deadline and Watchdog, Mission SLA Escalation, or Mission Attention Inbox unless a regression appears. Continue with the next coherent OTH subsystem using all twelve as established infrastructure.
 
 
 ## Repository
