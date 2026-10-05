@@ -43,6 +43,9 @@ def test_queued_mission_task_cancels_and_dispatch_honors_cancelled_state(tmp_pat
         assert kernel.db.get_task(task.id)["status"] == "cancelled"
         assert kernel.dispatch(task.id)["status"] == "cancelled"
 
+        state = missions.get("mission-cancel-queued")
+        assert state["completed_at"]
+
         snapshot = missions.control_snapshot("mission-cancel-queued", kernel.db.path)
         assert snapshot["graph"]["counts"]["cancelled"] == 1
         actions = {item["action"]: item for item in snapshot["actions"]}

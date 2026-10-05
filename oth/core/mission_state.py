@@ -543,7 +543,11 @@ class MissionStateStore:
             latest = max(nodes, key=lambda node: str(node.get("updated_at", "")), default=None)
             latest_task_id = (latest or {}).get("id") or mission["latest_task_id"]
             should_complete = aggregate in TERMINAL
-            completed_at = mission["completed_at"] if should_complete else None
+            completed_at = (
+                mission["completed_at"] or now_iso()
+                if should_complete
+                else None
+            )
             if aggregate == mission["status"] and completed_at == mission["completed_at"] and latest_task_id == mission["latest_task_id"]:
                 continue
             outcome = dict(mission["latest_outcome"] or {})

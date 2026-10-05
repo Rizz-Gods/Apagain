@@ -55,6 +55,12 @@ No process is terminated and no external platform request is forcibly interrupte
 
 ## Verification status
 
-Focused cancellation coverage was added in tests/test_mission_cancellation.py for queued task cancellation, blocked task cancellation, and graceful cancellation requests for running tasks.
-
-Local full-suite and live Console validation remain pending until the Windows runtime reconnects.
+- Focused cancellation suite: PASS (3/3).
+- Full OTH pytest suite: PASS (100%, exit code 0, runtime ~36.9s after the final fix).
+- Real Console control read: PASS.
+- Real Console control cancellation: PASS.
+- A blocked disposable mission was cancelled through the real HTTP control surface.
+- The exact task became `cancelled` and the mission became terminal `cancelled`.
+- The mission timeline recorded both task-level and mission-level cancellation events.
+- Reconciliation now persists `completed_at` on the first transition into a terminal mission state.
+- Disposable validation records were deleted after the check.

@@ -350,7 +350,6 @@ class OTHKernel:
                 "mission_id": json.loads(row["payload"] or "{}").get("mission_id"),
                 "reason": "operator_cancelled",
             }
-        import json
         stored_payload = json.loads(row["payload"])
         task_payload = dict(stored_payload)
         if task_payload.get("prompt"):
