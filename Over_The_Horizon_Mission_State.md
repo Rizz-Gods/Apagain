@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission Observability and Execution Timeline
+## Current subsystem: Mission Control Plane / Operator Command Center
 
-Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
+Status: IMPLEMENTED — LIVE VALIDATION PENDING
 
-Previous subsystem: Mission Approval Continuity — complete and live-validated
+Previous subsystem: Mission Observability and Execution Timeline — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -98,6 +98,13 @@ Previous subsystem: Mission Approval Continuity — complete and live-validated
   - CLI: `python -m oth.cli mission timeline ...`
   - Timeline reads are bounded to 500 events and do not execute actions.
   - Documentation: `docs/MISSION_OBSERVABILITY.md`
+  - Mission Control Plane / Operator Command Center subsystem:
+  - Unified HTTP read surface: `GET /api/missions/{mission_id}/control`.
+  - Unified HTTP action surface: `POST /api/missions/{mission_id}/control`.
+  - Control snapshot composes durable mission state, reachable graph, correlated timeline, and available operator actions.
+  - Approve/resume actions delegate to the existing kernel safety gates; no second execution path was introduced.
+  - Console UI now exposes mission status, graph counters, recent timeline, approval, and resume controls.
+  - Documentation: `docs/MISSION_CONTROL.md`.
 
 ### Verification achieved
 - Focused engineering tests: PASS
@@ -155,6 +162,10 @@ Previous subsystem: Mission Approval Continuity — complete and live-validated
   - Live Console timeline endpoint returned 9 correlated events for a real disposable mission.
   - Mission lifecycle events and underlying task events were both present.
   - Disposable mission/task/timeline records were removed after the check.
+- Mission Control Plane verification status:
+  - Focused regression coverage added in `tests/test_mission_control.py`.
+  - Remote implementation is committed on `main`.
+  - Full pytest and live Console HTTP validation are pending because the connected Windows runtime is currently offline.
 - A real console mission previously exposed a false-positive success bug; this was corrected and committed.
 - Commit pushed:
   - `730720b` — `fix: reject false-positive native engineering success`
@@ -174,10 +185,10 @@ Previous subsystem: Mission Approval Continuity — complete and live-validated
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Mission Observability and Execution Timeline is complete and live-validated.
+Mission Control Plane live validation against the real Windows Console/daemon runtime.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, or Mission Observability unless a regression appears. Continue with the next coherent OTH subsystem using all seven as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, or Mission Observability unless a regression appears. First live-validate Mission Control Plane when the Windows runtime is reachable; then continue with the next coherent OTH subsystem using all eight as established infrastructure.
 
 ## Repository
 Primary OTH directory:
