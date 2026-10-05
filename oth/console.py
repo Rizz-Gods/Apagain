@@ -259,6 +259,28 @@ class Handler(BaseHTTPRequestHandler):
             )
             self.json_response(200, {"mission_id": mission_id, "items": items})
             return
+        if self.path.startswith("/api/missions/") and self.path.endswith("/audit"):
+            mission_id = self.path.split("/")[3]
+            mission = STORE.missions.get(mission_id)
+            if mission is None:
+                self.json_response(404, {"error": "mission not found", "mission_id": mission_id})
+                return
+            items = STORE.missions.audit_for_mission(mission_id, limit=100)
+            integrity = STORE.missions.verify_audit_chain(mission_id)
+            self.json_response(200, {
+                "mission_id": mission_id,
+                "items": items,
+                "integrity": integrity,
+            })
+            return
+        if self.path == "/api/audit":
+            mission_id = None
+            query = self.path
+            if "?" in query:
+                mission_id = None
+            items = STORE.missions.list_audit(limit=100, mission_id=mission_id)
+            self.json_response(200, {"items": items, "integrity": STORE.missions.verify_audit_chain()})
+            return
         if self.path.startswith("/api/missions/") and self.path.endswith("/progress"):
             mission_id = self.path.split("/")[3]
             STORE.missions.reconcile(ROOT / "data" / "oth.db")

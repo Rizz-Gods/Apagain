@@ -864,6 +864,13 @@ class OTHKernel:
                 task_id=task_id,
                 status="queued",
             )
+            self.missions.add_audit_event(
+                mission_id,
+                "task.approve",
+                actor="operator",
+                task_id=task_id,
+                payload={"approved_by": "operator"},
+            )
         return {"status": "queued", "changed": True, "mission_id": mission_id or None}
 
     def approve_mission(

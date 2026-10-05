@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import uuid
@@ -73,6 +74,22 @@ class MissionStateStore:
                 ON mission_attention(mission_id, status, id);
             CREATE INDEX IF NOT EXISTS idx_mission_attention_status
                 ON mission_attention(status, id);
+            CREATE TABLE IF NOT EXISTS mission_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mission_id TEXT NOT NULL,
+                task_id TEXT,
+                actor TEXT NOT NULL,
+                action TEXT NOT NULL,
+                result TEXT NOT NULL,
+                payload TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                prev_hash TEXT,
+                entry_hash TEXT NOT NULL UNIQUE
+            );
+            CREATE INDEX IF NOT EXISTS idx_mission_audit_mission
+                ON mission_audit(mission_id, id);
+            CREATE INDEX IF NOT EXISTS idx_mission_audit_action
+                ON mission_audit(action, id);
             """
         )
         existing_columns = {
@@ -97,6 +114,128 @@ class MissionStateStore:
 
     def close(self) -> None:
         self.db.close()
+
+    def add_audit_event(
+        self,
+        mission_id: str,
+        action: str,
+        actor: str = "operator",
+        result: str = "success",
+        payload: dict[str, Any] | None = None,
+        task_id: str | None = None,
+        created_at: str | None = None,
+    ) -> dict[str, Any]:
+        """Append one tamper-evident operator/system decision record."""
+        event_time = created_at or now_iso()
+        normalized_payload = payload or {}
+        previous = self.db.execute(
+            "SELECT entry_hash FROM mission_audit ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        prev_hash = previous["entry_hash"] if previous else ""
+        canonical = json.dumps(
+            {
+                "mission_id": mission_id,
+                "task_id": task_id,
+                "actor": actor,
+                "action": action,
+                "result": result,
+                "payload": normalized_payload,
+                "created_at": event_time,
+                "prev_hash": prev_hash,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        entry_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        self.db.execute(
+            """
+            INSERT INTO mission_audit
+            (mission_id,task_id,actor,action,result,payload,created_at,prev_hash,entry_hash)
+            VALUES(?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                mission_id,
+                task_id,
+                str(actor or "operator"),
+                str(action),
+                str(result),
+                json.dumps(normalized_payload, ensure_ascii=False),
+                event_time,
+                prev_hash or None,
+                entry_hash,
+            ),
+        )
+        self.db.commit()
+        row = self.db.execute(
+            "SELECT * FROM mission_audit WHERE entry_hash=?",
+            (entry_hash,),
+        ).fetchone()
+        return self._audit_row(row)
+
+    def audit_for_mission(
+        self,
+        mission_id: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        rows = self.db.execute(
+            "SELECT * FROM mission_audit WHERE mission_id=? ORDER BY id DESC LIMIT ?",
+            (mission_id, limit),
+        ).fetchall()
+        return [self._audit_row(row) for row in reversed(rows)]
+
+    def list_audit(
+        self,
+        limit: int = 100,
+        mission_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        if mission_id:
+            return self.audit_for_mission(mission_id, limit)
+        rows = self.db.execute(
+            "SELECT * FROM mission_audit ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [self._audit_row(row) for row in reversed(rows)]
+
+    def verify_audit_chain(self, mission_id: str | None = None) -> dict[str, Any]:
+        rows = self.db.execute(
+            "SELECT * FROM mission_audit ORDER BY id ASC"
+        ).fetchall()
+        previous_global = ""
+        checked = 0
+        for row in rows:
+            if mission_id and row["mission_id"] != mission_id:
+                previous_global = row["entry_hash"]
+                continue
+            expected_prev = previous_global or None
+            canonical = json.dumps(
+                {
+                    "mission_id": row["mission_id"],
+                    "task_id": row["task_id"],
+                    "actor": row["actor"],
+                    "action": row["action"],
+                    "result": row["result"],
+                    "payload": json.loads(row["payload"] or "{}"),
+                    "created_at": row["created_at"],
+                    "prev_hash": row["prev_hash"] or "",
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
+            expected_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+            if (row["prev_hash"] or None) != expected_prev or row["entry_hash"] != expected_hash:
+                return {
+                    "valid": False,
+                    "checked": checked,
+                    "broken_id": int(row["id"]),
+                    "reason": "hash_chain_mismatch",
+                }
+            previous_global = row["entry_hash"]
+            checked += 1
+        return {"valid": True, "checked": checked}
 
     def add_timeline_event(
         self,
@@ -278,12 +417,20 @@ class MissionStateStore:
             (acknowledged_at, acknowledged_by, int(attention_id)),
         )
         self.db.commit()
-        return self._attention_row(
+        result = self._attention_row(
             self.db.execute(
                 "SELECT * FROM mission_attention WHERE id=?",
                 (int(attention_id),),
             ).fetchone()
         )
+        self.add_audit_event(
+            result["mission_id"],
+            "attention.acknowledge",
+            actor=acknowledged_by,
+            payload={"attention_id": int(attention_id), "status": result["status"]},
+            task_id=result.get("task_id"),
+        )
+        return result
 
     @staticmethod
     def _attention_row(row: sqlite3.Row) -> dict[str, Any]:
@@ -299,6 +446,21 @@ class MissionStateStore:
             "created_at": row["created_at"],
             "acknowledged_at": row["acknowledged_at"],
             "acknowledged_by": row["acknowledged_by"],
+        }
+
+    @staticmethod
+    def _audit_row(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": int(row["id"]),
+            "mission_id": row["mission_id"],
+            "task_id": row["task_id"],
+            "actor": row["actor"],
+            "action": row["action"],
+            "result": row["result"],
+            "payload": json.loads(row["payload"] or "{}"),
+            "created_at": row["created_at"],
+            "prev_hash": row["prev_hash"],
+            "entry_hash": row["entry_hash"],
         }
 
     def timeline_for_mission(
@@ -407,12 +569,20 @@ class MissionStateStore:
             status="queued",
             created_at=now,
         )
+        self.add_audit_event(
+            mission_id,
+            "mission.created",
+            actor="system",
+            payload={"goal": goal, "strategy": strategy},
+            created_at=now,
+        )
         return self.get(mission_id) or {}
 
     def set_deadline(
         self,
         mission_id: str,
         deadline_at: str | None,
+        actor: str = "operator",
     ) -> dict[str, Any]:
         mission = self.get(mission_id)
         if mission is None:
@@ -448,13 +618,22 @@ class MissionStateStore:
             created_at=now,
         )
         self.watchdog_for_mission(mission_id, task_db=None, now=now)
-        return self.get(mission_id) or {}
+        result = self.get(mission_id) or {}
+        self.add_audit_event(
+            mission_id,
+            "mission.deadline.clear" if normalized is None else "mission.deadline.set",
+            actor=actor,
+            payload={"deadline_at": normalized},
+            result="success",
+        )
+        return result
 
     def set_escalation_policy(
         self,
         mission_id: str,
         warning_before_seconds: float = 900.0,
         critical_before_seconds: float = 300.0,
+        actor: str = "operator",
     ) -> dict[str, Any]:
         mission = self.get(mission_id)
         if mission is None:
@@ -492,7 +671,18 @@ class MissionStateStore:
             created_at=now,
         )
         self.watchdog_for_mission(mission_id, task_db=None, now=now)
-        return self.get(mission_id) or {}
+        result = self.get(mission_id) or {}
+        self.add_audit_event(
+            mission_id,
+            "mission.escalation.policy_set",
+            actor=actor,
+            payload={
+                "warning_before_seconds": warning,
+                "critical_before_seconds": critical,
+            },
+            result="success",
+        )
+        return result
 
     def watchdog_for_mission(
         self,
@@ -806,6 +996,13 @@ class MissionStateStore:
                 {"queued_task_ids": queued, "skipped": skipped},
                 status=refreshed["status"],
             )
+        self.add_audit_event(
+            mission_id,
+            "mission.resume",
+            actor="operator",
+            result="success" if queued else "no_change",
+            payload={"queued_task_ids": queued, "skipped": skipped, "reason": reason},
+        )
         return {
             "mission_id": mission_id,
             "queued": queued,
@@ -1240,6 +1437,8 @@ class MissionStateStore:
                 "critical_before_seconds": mission.get("escalation_critical_seconds", 300.0),
             }
         attention = self.attention_for_mission(mission_id, limit=50)
+        audit = self.audit_for_mission(mission_id, limit=50)
+        audit_integrity = self.verify_audit_chain(mission_id)
         open_attention = self.attention_for_mission(
             mission_id,
             limit=200,
@@ -1253,6 +1452,8 @@ class MissionStateStore:
             "progress": self.progress_for_mission(mission_id, task_db),
             "attention": attention,
             "attention_open_count": len(open_attention),
+            "audit": audit,
+            "audit_integrity": audit_integrity,
             "graph": graph,
             "timeline": timeline,
             "actions": actions,

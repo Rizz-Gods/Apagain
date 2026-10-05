@@ -250,11 +250,34 @@ Previous subsystem: Mission Progress and ETA — complete and live-validated
 - Current intended daemon startup path:
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
+- Mission Operator Audit Ledger subsystem:
+  - Durable `mission_audit` ledger in `data/console.db`.
+  - Operator mutations are recorded with actor, action, result, payload, timestamp, previous hash, and entry hash.
+  - Hash chaining makes ledger tampering detectable without changing the existing mission timeline semantics.
+  - Covered mutations include mission creation, deadline set/clear, escalation policy changes, task approval, mission resume, mission cancellation, and attention acknowledgement.
+  - CLI: `python -m oth.cli mission audit <mission_id> [--limit N] [--verify]`.
+  - Console API: `GET /api/missions/{mission_id}/audit`.
+  - Unified Mission Control now exposes `audit` and `audit_integrity`.
+  - Documentation: `docs/MISSION_AUDIT.md`.
+
+### Verification achieved
+- Mission Operator Audit Ledger focused tests: PASS (5/5).
+- Full OTH pytest suite: PASS (100%, exit code 0, runtime ~23.72s).
+- Pycompile and `git diff --check`: PASS.
+- Live Console audit flow: PASS.
+  - Existing Console restarted on port 18765 with the migrated audit schema.
+  - Disposable live mission created and exercised through HTTP.
+  - Past deadline produced `mission.deadline_exceeded`.
+  - Critical attention item was acknowledged through the live API.
+  - Mission control exposed a valid audit ledger and `audit_integrity.valid=true`.
+  - Live audit contained `mission.created`, `mission.deadline.set`, and `attention.acknowledge`.
+  - Disposable audit/mission/timeline rows were removed after validation; remaining ledger integrity stayed valid.
+
 ### Current uncompleted item
-None. Mission Attention Inbox is complete and live-validated.
+None. Mission Operator Audit Ledger is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, Mission Control Plane, Mission Cancellation and Graceful Intervention, Mission Deadline and Watchdog, Mission SLA Escalation, or Mission Attention Inbox unless a regression appears. Continue with the next coherent OTH subsystem using all twelve as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, Mission Control Plane, Mission Cancellation and Graceful Intervention, Mission Deadline and Watchdog, Mission SLA Escalation, Mission Progress and ETA, Mission Attention Inbox, or Mission Operator Audit Ledger unless a regression appears. Continue with the next coherent OTH subsystem using these established layers as infrastructure.
 
 
 ## Repository

@@ -110,6 +110,10 @@ def main(argv=None):
     mission_timeline = mission_sub.add_parser("timeline")
     mission_timeline.add_argument("mission_id")
     mission_timeline.add_argument("--limit", type=int, default=200)
+    mission_audit = mission_sub.add_parser("audit")
+    mission_audit.add_argument("mission_id")
+    mission_audit.add_argument("--limit", type=int, default=100)
+    mission_audit.add_argument("--verify", action="store_true")
     mission_cancel = mission_sub.add_parser("cancel")
     mission_cancel.add_argument("mission_id")
     mission_cancel.add_argument("--task-id", action="append")
@@ -520,6 +524,17 @@ def main(argv=None):
                     print(json.dumps({"status": "invalid", "error": str(exc)}, indent=2))
                     return
                 print(json.dumps(result, indent=2))
+            elif args.mission_cmd == "audit":
+                payload = {
+                    "mission_id": args.mission_id,
+                    "items": kernel.missions.audit_for_mission(
+                        args.mission_id,
+                        limit=args.limit,
+                    ),
+                }
+                if args.verify:
+                    payload["integrity"] = kernel.missions.verify_audit_chain(args.mission_id)
+                print(json.dumps(payload, indent=2))
             elif args.mission_cmd == "progress":
                 print(json.dumps(
                     kernel.missions.progress_for_mission(

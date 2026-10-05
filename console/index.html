@@ -60,6 +60,8 @@ footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;displ
   <div id="missionAttention" class="attention"></div>
   <div id="missionNotice"></div>
   <div id="missionTimeline" class="timeline"></div>
+  <div class="small" style="margin-top:10px">Operator audit ledger</div>
+  <div id="missionAudit" class="timeline"></div>
 </section>
 <section id="messages"></section>
 <footer>
@@ -171,6 +173,15 @@ function renderControl(data){
 
   const notice=$('#missionNotice'); notice.innerHTML='';
   const timeline=$('#missionTimeline'); timeline.innerHTML='';
+  const auditBox=$('#missionAudit'); auditBox.innerHTML='';
+  (data.audit||[]).slice(-6).reverse().forEach(item=>{
+    const row=document.createElement('div'); row.className='timeline-item';
+    const action=document.createElement('span'); action.className='kind'; action.textContent=item.action;
+    const actor=document.createElement('span'); actor.textContent=item.actor;
+    const result=document.createElement('span'); result.textContent=item.result;
+    const hash=document.createElement('span'); hash.className='time'; hash.textContent=(item.entry_hash||'').slice(0,10);
+    row.append(action,actor,result,hash); auditBox.appendChild(row);
+  });
   const items=(data.timeline||[]).slice(-8).reverse();
   items.forEach(item=>{
     const row=document.createElement('div'); row.className='timeline-item';
