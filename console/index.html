@@ -117,13 +117,16 @@ function renderControl(data){
   $('#status').textContent='Mission '+m.status+' · '+(counts.total||0)+' tasks';
 
   const metrics=$('#missionMetrics'); metrics.innerHTML='';
-  [['Total',counts.total||0],['Queued',counts.queued||0],['Running',counts.running||0],['Blocked',counts.blocked||0],['Failed',counts.failed||0]].forEach(([k,v])=>metrics.appendChild(metric(k,v)));
+  [['Total',counts.total||0],['Queued',counts.queued||0],['Running',counts.running||0],['Blocked',counts.blocked||0],['Failed',counts.failed||0],['Cancelled',counts.cancelled||0]].forEach(([k,v])=>metrics.appendChild(metric(k,v)));
 
   const actions=$('#missionActions'); actions.innerHTML='';
   (data.actions||[]).filter(item=>item.enabled).forEach(item=>{
     const b=document.createElement('button');
-    b.textContent=item.action==='approve'?'Approve blocked':item.action==='resume'?'Resume failed':'Refresh';
-    b.onclick=()=>runMissionAction(item.action);
+    b.textContent=item.action==='approve'?'Approve blocked':item.action==='resume'?'Resume failed':item.action==='cancel'?'Cancel active':'Refresh';
+    b.onclick=()=>{
+      if(item.action==='cancel' && !window.confirm('Cancel the active tasks in this mission? Running tasks receive a graceful cancellation request.')) return;
+      runMissionAction(item.action);
+    };
     actions.appendChild(b);
   });
 
@@ -193,7 +196,7 @@ async function watchMission(missionId){
     const data=await refreshMissionControl(missionId);
     if(!data || Date.now()-started>=30*60*1000)return;
     const status=data.mission?.status;
-    if(['succeeded','failed'].includes(status))return;
+    if(['succeeded','failed','cancelled'].includes(status))return;
     controlPoll=setTimeout(tick,1500);
   }
   tick();
