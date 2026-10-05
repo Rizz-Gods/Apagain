@@ -65,6 +65,10 @@ class MissionStateStore:
             ("deadline_at", "TEXT"),
             ("watchdog_status", "TEXT NOT NULL DEFAULT 'ok'"),
             ("watchdog_checked_at", "TEXT"),
+            ("escalation_level", "TEXT NOT NULL DEFAULT 'normal'"),
+            ("escalation_warning_seconds", "REAL NOT NULL DEFAULT 900"),
+            ("escalation_critical_seconds", "REAL NOT NULL DEFAULT 300"),
+            ("escalation_checked_at", "TEXT"),
         )
         for column, definition in migrations:
             if column not in existing_columns:
@@ -180,8 +184,10 @@ class MissionStateStore:
             INSERT INTO missions
             (id,conversation_id,goal,strategy,root_task_ids,status,
              latest_task_id,latest_outcome,created_at,updated_at,completed_at,
-             deadline_at,watchdog_status,watchdog_checked_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             deadline_at,watchdog_status,watchdog_checked_at,
+             escalation_level,escalation_warning_seconds,escalation_critical_seconds,
+             escalation_checked_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 mission_id,
@@ -197,6 +203,10 @@ class MissionStateStore:
                 None,
                 None,
                 "ok",
+                now,
+                "normal",
+                900.0,
+                300.0,
                 now,
             ),
         )
@@ -231,20 +241,64 @@ class MissionStateStore:
             normalized = parsed.astimezone(timezone.utc).isoformat()
 
         now = now_iso()
-        next_status = "ok"
         self.db.execute(
             """
             UPDATE missions
-            SET deadline_at=?, watchdog_status=?, watchdog_checked_at=?, updated_at=?
+            SET deadline_at=?, watchdog_status=?, watchdog_checked_at=?,
+                escalation_level=?, escalation_checked_at=?, updated_at=?
             WHERE id=?
             """,
-            (normalized, next_status, now, now, mission_id),
+            (normalized, "ok", now, "normal", now, now, mission_id),
         )
         self.db.commit()
         self.add_timeline_event(
             mission_id,
             "mission.deadline_cleared" if normalized is None else "mission.deadline_set",
             {"deadline_at": normalized},
+            status=mission["status"],
+            created_at=now,
+        )
+        self.watchdog_for_mission(mission_id, task_db=None, now=now)
+        return self.get(mission_id) or {}
+
+    def set_escalation_policy(
+        self,
+        mission_id: str,
+        warning_before_seconds: float = 900.0,
+        critical_before_seconds: float = 300.0,
+    ) -> dict[str, Any]:
+        mission = self.get(mission_id)
+        if mission is None:
+            return {"status": "missing", "mission_id": mission_id}
+        try:
+            warning = float(warning_before_seconds)
+            critical = float(critical_before_seconds)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("escalation thresholds must be numeric seconds") from exc
+        if warning < 0 or critical < 0:
+            raise ValueError("escalation thresholds must be non-negative")
+        if warning < critical:
+            raise ValueError("warning_before_seconds must be >= critical_before_seconds")
+        now = now_iso()
+        self.db.execute(
+            """
+            UPDATE missions
+            SET escalation_warning_seconds=?,
+                escalation_critical_seconds=?,
+                escalation_checked_at=?,
+                updated_at=?
+            WHERE id=?
+            """,
+            (warning, critical, now, now, mission_id),
+        )
+        self.db.commit()
+        self.add_timeline_event(
+            mission_id,
+            "mission.escalation_policy_set",
+            {
+                "warning_before_seconds": warning,
+                "critical_before_seconds": critical,
+            },
             status=mission["status"],
             created_at=now,
         )
@@ -270,29 +324,52 @@ class MissionStateStore:
         )
         if current.tzinfo is None or deadline.tzinfo is None:
             return mission
-        overdue = current >= deadline
-        next_status = "overdue" if overdue else "ok"
-        if mission.get("watchdog_status") == next_status:
-            self.db.execute(
-                "UPDATE missions SET watchdog_checked_at=? WHERE id=?",
-                (current.astimezone(timezone.utc).isoformat(), mission_id),
-            )
-            self.db.commit()
-            return self.get(mission_id) or mission
+
         checked_at = current.astimezone(timezone.utc).isoformat()
+        seconds_to_deadline = (deadline - current).total_seconds()
+        warning_before = float(mission.get("escalation_warning_seconds") or 900.0)
+        critical_before = float(mission.get("escalation_critical_seconds") or 300.0)
+        overdue = seconds_to_deadline <= 0
+        watchdog_status = "overdue" if overdue else "ok"
+        if overdue:
+            escalation_level = "overdue"
+        elif seconds_to_deadline <= critical_before:
+            escalation_level = "critical"
+        elif seconds_to_deadline <= warning_before:
+            escalation_level = "warning"
+        else:
+            escalation_level = "normal"
+
+        previous_watchdog = mission.get("watchdog_status", "ok")
+        previous_level = mission.get("escalation_level", "normal")
+        changed = (
+            previous_watchdog != watchdog_status
+            or previous_level != escalation_level
+        )
         outcome = dict(mission.get("latest_outcome") or {})
         if overdue:
             outcome["deadline_exceeded"] = mission["deadline_at"]
         else:
             outcome.pop("deadline_exceeded", None)
+        outcome["deadline_escalation"] = {
+            "level": escalation_level,
+            "seconds_to_deadline": round(seconds_to_deadline, 3),
+            "warning_before_seconds": warning_before,
+            "critical_before_seconds": critical_before,
+        }
+
         self.db.execute(
             """
             UPDATE missions
-            SET watchdog_status=?, watchdog_checked_at=?, latest_outcome=?, updated_at=?
+            SET watchdog_status=?, watchdog_checked_at=?,
+                escalation_level=?, escalation_checked_at=?,
+                latest_outcome=?, updated_at=?
             WHERE id=?
             """,
             (
-                next_status,
+                watchdog_status,
+                checked_at,
+                escalation_level,
                 checked_at,
                 json.dumps(outcome, ensure_ascii=False),
                 checked_at,
@@ -300,16 +377,30 @@ class MissionStateStore:
             ),
         )
         self.db.commit()
-        self.add_timeline_event(
-            mission_id,
-            "mission.deadline_exceeded" if overdue else "mission.deadline_cleared",
-            {
-                "deadline_at": mission["deadline_at"],
-                "watchdog_status": next_status,
-            },
-            status=mission["status"],
-            created_at=checked_at,
-        )
+
+        if changed:
+            if escalation_level == "warning":
+                kind = "mission.escalation_warning"
+            elif escalation_level == "critical":
+                kind = "mission.escalation_critical"
+            elif escalation_level == "overdue":
+                kind = "mission.deadline_exceeded"
+            else:
+                kind = "mission.escalation_cleared"
+            self.add_timeline_event(
+                mission_id,
+                kind,
+                {
+                    "deadline_at": mission["deadline_at"],
+                    "seconds_to_deadline": round(seconds_to_deadline, 3),
+                    "watchdog_status": watchdog_status,
+                    "escalation_level": escalation_level,
+                    "warning_before_seconds": warning_before,
+                    "critical_before_seconds": critical_before,
+                },
+                status=mission["status"],
+                created_at=checked_at,
+            )
         return self.get(mission_id) or mission
 
     def watchdog(
@@ -326,6 +417,8 @@ class MissionStateStore:
             """
         ).fetchall()
         checked = 0
+        warning = 0
+        critical = 0
         overdue = 0
         for row in rows:
             checked += 1
@@ -334,9 +427,18 @@ class MissionStateStore:
                 task_db,
                 now=now,
             )
-            if mission and mission.get("watchdog_status") == "overdue":
-                overdue += 1
-        return {"checked": checked, "overdue": overdue}
+            if not mission:
+                continue
+            level = mission.get("escalation_level")
+            warning += int(level == "warning")
+            critical += int(level == "critical")
+            overdue += int(level == "overdue")
+        return {
+            "checked": checked,
+            "warning": warning,
+            "critical": critical,
+            "overdue": overdue,
+        }
 
     def attach_root_tasks(self, mission_id: str, root_task_ids: list[str]) -> dict[str, Any]:
         now = now_iso()
@@ -847,25 +949,32 @@ class MissionStateStore:
             },
         ]
         deadline = None
+        escalation = None
         if mission.get("deadline_at"):
             now_dt = datetime.now(timezone.utc)
             deadline_dt = datetime.fromisoformat(
                 str(mission["deadline_at"]).replace("Z", "+00:00")
             )
-            overdue_seconds = max(
-                0.0,
-                (now_dt - deadline_dt).total_seconds(),
-            )
+            seconds_to_deadline = (deadline_dt - now_dt).total_seconds()
+            overdue_seconds = max(0.0, -seconds_to_deadline)
             deadline = {
                 "at": mission["deadline_at"],
                 "status": mission.get("watchdog_status", "ok"),
                 "checked_at": mission.get("watchdog_checked_at"),
                 "overdue_seconds": overdue_seconds,
             }
+            escalation = {
+                "level": mission.get("escalation_level", "normal"),
+                "checked_at": mission.get("escalation_checked_at"),
+                "seconds_to_deadline": seconds_to_deadline,
+                "warning_before_seconds": mission.get("escalation_warning_seconds", 900.0),
+                "critical_before_seconds": mission.get("escalation_critical_seconds", 300.0),
+            }
         return {
             "mission_id": mission_id,
             "mission": mission,
             "deadline": deadline,
+            "escalation": escalation,
             "graph": graph,
             "timeline": timeline,
             "actions": actions,
@@ -924,6 +1033,10 @@ class MissionStateStore:
             "deadline_at": row["deadline_at"] if "deadline_at" in row.keys() else None,
             "watchdog_status": row["watchdog_status"] if "watchdog_status" in row.keys() else "ok",
             "watchdog_checked_at": row["watchdog_checked_at"] if "watchdog_checked_at" in row.keys() else None,
+            "escalation_level": row["escalation_level"] if "escalation_level" in row.keys() else "normal",
+            "escalation_warning_seconds": row["escalation_warning_seconds"] if "escalation_warning_seconds" in row.keys() else 900.0,
+            "escalation_critical_seconds": row["escalation_critical_seconds"] if "escalation_critical_seconds" in row.keys() else 300.0,
+            "escalation_checked_at": row["escalation_checked_at"] if "escalation_checked_at" in row.keys() else None,
         }
 
     def _graph_summary(self, root_ids: list[str]) -> str:

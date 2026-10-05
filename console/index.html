@@ -110,13 +110,16 @@ function renderControl(data){
   const panel=$('#control');
   if(!data || !data.mission){panel.hidden=true;return;}
   panel.hidden=false;
-  const m=data.mission, g=data.graph||{}, counts=g.counts||{}, deadline=data.deadline;
+  const m=data.mission, g=data.graph||{}, counts=g.counts||{}, deadline=data.deadline, escalation=data.escalation;
   $('#missionGoal').textContent=m.goal || 'Mission';
   const deadlineText=deadline
     ? ' · deadline '+deadline.at+' · '+deadline.status
     : ' · no deadline';
-  $('#missionMeta').textContent='Mission '+m.id+' · latest task '+(m.latest_task_id||'none')+deadlineText;
-  $('#missionStatus').textContent=m.status+(deadline?.status==='overdue'?' · OVERDUE':'');
+  const escalationText=escalation
+    ? ' · escalation '+escalation.level+' ('+Math.max(0, escalation.seconds_to_deadline).toFixed(0)+'s)'
+    : '';
+  $('#missionMeta').textContent='Mission '+m.id+' · latest task '+(m.latest_task_id||'none')+deadlineText+escalationText;
+  $('#missionStatus').textContent=m.status+(deadline?.status==='overdue'?' · OVERDUE':'')+(escalation?.level==='critical'?' · CRITICAL':'')+(escalation?.level==='warning'?' · WARNING':'');
   $('#status').textContent='Mission '+m.status+' · '+(counts.total||0)+' tasks';
 
   const metrics=$('#missionMetrics'); metrics.innerHTML='';

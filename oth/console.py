@@ -382,6 +382,40 @@ class Handler(BaseHTTPRequestHandler):
             self.json_response(status, {"result": result, "control": snapshot})
             return
 
+        if self.path.startswith("/api/missions/") and self.path.endswith("/escalation"):
+            mission_id = self.path.split("/")[3]
+            current = STORE.missions.get(mission_id)
+            if current is None:
+                self.json_response(404, {"error": "mission not found", "mission_id": mission_id})
+                return
+            try:
+                if body.get("reset"):
+                    warning = 900.0
+                    critical = 300.0
+                else:
+                    warning = body.get(
+                        "warning_before_seconds",
+                        current.get("escalation_warning_seconds", 900.0),
+                    )
+                    critical = body.get(
+                        "critical_before_seconds",
+                        current.get("escalation_critical_seconds", 300.0),
+                    )
+                result = STORE.missions.set_escalation_policy(
+                    mission_id,
+                    warning_before_seconds=warning,
+                    critical_before_seconds=critical,
+                )
+            except (TypeError, ValueError) as exc:
+                self.json_response(400, {"error": str(exc)})
+                return
+            snapshot = STORE.missions.control_snapshot(
+                mission_id,
+                ROOT / "data" / "oth.db",
+            )
+            self.json_response(200, {"result": result, "control": snapshot})
+            return
+
         if self.path.startswith("/api/missions/") and self.path.endswith("/control"):
             mission_id = self.path.split("/")[3]
             action = str(body.get("action", "")).strip().lower()

@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission Deadline and Watchdog
+## Current subsystem: Mission SLA Escalation
 
 Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
 
-Previous subsystem: Mission Cancellation and Graceful Intervention — complete and live-validated
+Previous subsystem: Mission Deadline and Watchdog — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -190,6 +190,16 @@ Previous subsystem: Mission Cancellation and Graceful Intervention — complete 
   - Daemon runner invokes the watchdog each cycle without mutating task execution state.
   - Disposable mission/task/timeline rows were removed after validation.
   - Documentation: `docs/MISSION_DEADLINE.md`.
+- Mission SLA Escalation verification: PASS
+  - Focused mission deadline/escalation suite: PASS (5/5).
+  - Full OTH pytest suite: PASS (100%, exit code 0, runtime 23.06s).
+  - Pycompile of changed Python files: PASS.
+  - git diff --check: PASS.
+  - Live Console API policy persistence: PASS.
+  - Live clock-relative escalation transition: PASS (warning -> critical -> overdue).
+  - Live timeline contained mission.escalation_policy_set, mission.escalation_warning, mission.escalation_critical, and mission.deadline_exceeded.
+  - Disposable validation mission and timeline rows were removed after validation.
+  - Documentation: docs/MISSION_ESCALATION.md.
 - Mission Control Plane verification: PASS
   - Focused Mission Control regression tests: PASS (2/2).
   - Full OTH test suite: PASS (100%, exit code 0, runtime ~40.6s).
@@ -219,10 +229,11 @@ Previous subsystem: Mission Cancellation and Graceful Intervention — complete 
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Mission Deadline and Watchdog is complete and live-validated.
+None. Mission SLA Escalation is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, Mission Control Plane, or Mission Cancellation and Graceful Intervention unless a regression appears. Continue with the next coherent OTH subsystem using all ten as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, Mission Control Plane, Mission Cancellation and Graceful Intervention, Mission Deadline and Watchdog, or Mission SLA Escalation unless a regression appears. Continue with the next coherent OTH subsystem using all eleven as established infrastructure.
+
 
 ## Repository
 Primary OTH directory:

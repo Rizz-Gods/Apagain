@@ -119,6 +119,12 @@ def main(argv=None):
     deadline_group = mission_deadline.add_mutually_exclusive_group(required=True)
     deadline_group.add_argument("--at")
     deadline_group.add_argument("--clear", action="store_true")
+    mission_escalation = mission_sub.add_parser("escalation")
+    mission_escalation.add_argument("mission_id")
+    escalation_group = mission_escalation.add_mutually_exclusive_group(required=True)
+    escalation_group.add_argument("--warning-before", type=float)
+    escalation_group.add_argument("--critical-before", type=float)
+    escalation_group.add_argument("--reset", action="store_true")
     opp = sub.add_parser("opportunities")
     opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
     opp_list = opp_sub.add_parser("list")
@@ -477,6 +483,29 @@ def main(argv=None):
                     result = kernel.missions.set_deadline(
                         args.mission_id,
                         None if args.clear else args.at,
+                    )
+                except ValueError as exc:
+                    print(json.dumps({"status": "invalid", "error": str(exc)}, indent=2))
+                    return
+                print(json.dumps(result, indent=2))
+            elif args.mission_cmd == "escalation":
+                current = kernel.missions.get(args.mission_id)
+                if current is None:
+                    print(json.dumps({"status": "missing", "mission_id": args.mission_id}, indent=2))
+                    return
+                warning = 900.0 if args.reset else current.get("escalation_warning_seconds", 900.0)
+                critical = 300.0 if args.reset else current.get("escalation_critical_seconds", 300.0)
+                if args.warning_before is not None:
+                    warning = args.warning_before
+                    critical = current.get("escalation_critical_seconds", 300.0)
+                elif args.critical_before is not None:
+                    warning = current.get("escalation_warning_seconds", 900.0)
+                    critical = args.critical_before
+                try:
+                    result = kernel.missions.set_escalation_policy(
+                        args.mission_id,
+                        warning_before_seconds=warning,
+                        critical_before_seconds=critical,
                     )
                 except ValueError as exc:
                     print(json.dumps({"status": "invalid", "error": str(exc)}, indent=2))

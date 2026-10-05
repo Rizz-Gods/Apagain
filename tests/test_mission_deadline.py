@@ -99,3 +99,114 @@ def test_runner_invokes_mission_watchdog(tmp_path):
     finally:
         kernel.close()
         missions.close()
+
+
+def test_deadline_escalation_transitions_are_durable_and_idempotent(tmp_path):
+    write_minimal_config(tmp_path)
+    missions = MissionStateStore(tmp_path / "data" / "console.db")
+    try:
+        missions.create(
+            "conversation-1",
+            "Escalated mission",
+            "observe -> intervene",
+            mission_id="mission-escalation",
+        )
+        missions.set_escalation_policy(
+            "mission-escalation",
+            warning_before_seconds=900,
+            critical_before_seconds=300,
+        )
+        missions.set_deadline(
+            "mission-escalation",
+            "2026-10-05T12:00:00+00:00",
+        )
+
+        state = missions.watchdog_for_mission(
+            "mission-escalation",
+            None,
+            now="2026-10-05T11:40:00+00:00",
+        )
+        assert state["escalation_level"] == "normal"
+
+        state = missions.watchdog_for_mission(
+            "mission-escalation",
+            None,
+            now="2026-10-05T11:50:00+00:00",
+        )
+        assert state["escalation_level"] == "warning"
+        warning_timeline = missions.timeline_for_mission("mission-escalation")
+        assert sum(item["kind"] == "mission.escalation_warning" for item in warning_timeline) == 1
+
+        state = missions.watchdog_for_mission(
+            "mission-escalation",
+            None,
+            now="2026-10-05T11:56:00+00:00",
+        )
+        assert state["escalation_level"] == "critical"
+        assert state["watchdog_status"] == "ok"
+
+        state = missions.watchdog_for_mission(
+            "mission-escalation",
+            None,
+            now="2026-10-05T12:01:00+00:00",
+        )
+        assert state["escalation_level"] == "overdue"
+        assert state["watchdog_status"] == "overdue"
+        assert state["latest_outcome"]["deadline_exceeded"].startswith("2026-10-05")
+
+        timeline = missions.timeline_for_mission("mission-escalation")
+        kinds = [item["kind"] for item in timeline]
+        assert "mission.escalation_critical" in kinds
+        assert "mission.deadline_exceeded" in kinds
+
+        missions.watchdog_for_mission(
+            "mission-escalation",
+            None,
+            now="2026-10-05T12:02:00+00:00",
+        )
+        timeline_after = missions.timeline_for_mission("mission-escalation")
+        assert kinds.count("mission.deadline_exceeded") == 1
+        assert [item["kind"] for item in timeline_after].count("mission.deadline_exceeded") == 1
+    finally:
+        missions.close()
+
+
+def test_escalation_policy_validation_and_control_snapshot(tmp_path):
+    write_minimal_config(tmp_path)
+    missions = MissionStateStore(tmp_path / "data" / "console.db")
+    try:
+        missions.create(
+            "conversation-1",
+            "Policy mission",
+            "watch",
+            mission_id="mission-escalation-policy",
+        )
+        try:
+            missions.set_escalation_policy(
+                "mission-escalation-policy",
+                warning_before_seconds=60,
+                critical_before_seconds=120,
+            )
+        except ValueError as exc:
+            assert "warning_before_seconds" in str(exc)
+        else:
+            raise AssertionError("expected threshold ordering validation")
+
+        state = missions.set_escalation_policy(
+            "mission-escalation-policy",
+            warning_before_seconds=600,
+            critical_before_seconds=120,
+        )
+        assert state["escalation_warning_seconds"] == 600.0
+        assert state["escalation_critical_seconds"] == 120.0
+
+        missions.set_deadline(
+            "mission-escalation-policy",
+            "2099-01-01T00:00:00+00:00",
+        )
+        snapshot = missions.control_snapshot("mission-escalation-policy", tmp_path / "data" / "oth.db")
+        assert snapshot["escalation"]["level"] == "normal"
+        assert snapshot["escalation"]["warning_before_seconds"] == 600.0
+        assert snapshot["escalation"]["critical_before_seconds"] == 120.0
+    finally:
+        missions.close()
