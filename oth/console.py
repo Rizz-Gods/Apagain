@@ -380,13 +380,19 @@ class Handler(BaseHTTPRequestHandler):
                         task_ids=task_ids,
                         approve_external=bool(body.get("approve_external", False)),
                     )
+                elif action == "cancel":
+                    result = kernel.cancel_mission(
+                        mission_id,
+                        task_ids=task_ids,
+                        reason=str(body.get("reason", "operator_cancel")),
+                    )
                 elif action == "refresh":
                     result = STORE.missions.reconcile(ROOT / "data" / "oth.db")
                 else:
                     self.json_response(400, {
                         "error": "unsupported mission control action",
                         "action": action,
-                        "supported": ["approve", "resume", "refresh"],
+                        "supported": ["approve", "resume", "cancel", "refresh"],
                     })
                     return
             finally:
