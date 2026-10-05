@@ -343,6 +343,13 @@ class OTHKernel:
         if not rows:
             raise ValueError(f"Unknown task: {task_id}")
         row = rows[0]
+        if row["status"] == "cancelled":
+            return {
+                "status": "cancelled",
+                "task_id": task_id,
+                "mission_id": json.loads(row["payload"] or "{}").get("mission_id"),
+                "reason": "operator_cancelled",
+            }
         import json
         stored_payload = json.loads(row["payload"])
         task_payload = dict(stored_payload)
@@ -893,6 +900,19 @@ class OTHKernel:
             "approved": approved,
             "skipped": skipped,
         }
+
+    def cancel_mission(
+        self,
+        mission_id: str,
+        task_ids: list[str] | None = None,
+        reason: str = "operator_cancel",
+    ) -> dict:
+        return self.missions.cancel_mission(
+            mission_id,
+            self.db.path,
+            task_ids=task_ids,
+            reason=reason,
+        )
 
     def tasks(self):
         return [dict(r) for r in self.db.list_tasks()]
