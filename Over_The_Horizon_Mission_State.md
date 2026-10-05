@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission SLA Escalation
+## Current subsystem: Mission Progress and ETA
 
 Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
 
-Previous subsystem: Mission Deadline and Watchdog — complete and live-validated
+Previous subsystem: Mission SLA Escalation — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -200,6 +200,17 @@ Previous subsystem: Mission Deadline and Watchdog — complete and live-validate
   - Live timeline contained mission.escalation_policy_set, mission.escalation_warning, mission.escalation_critical, and mission.deadline_exceeded.
   - Disposable validation mission and timeline rows were removed after validation.
   - Documentation: docs/MISSION_ESCALATION.md.
+- Mission Progress and ETA verification: PASS
+  - Focused progress suite: PASS (2/2).
+  - Full OTH pytest suite: PASS (100%, exit code 0, runtime 27.10s).
+  - Live Console progress endpoint: PASS.
+  - Live unified control progress: PASS.
+  - Disposable real mission reported 50% completion with 1/2 terminal tasks.
+  - Observed 60-second cycle history produced a 60-second ETA.
+  - No-history ETA suppression remains covered by focused tests.
+  - Disposable validation mission/task/timeline rows were removed after validation.
+  - Console was restarted through the intended VBS startup path.
+  - Documentation: docs/MISSION_PROGRESS.md.
 - Mission Control Plane verification: PASS
   - Focused Mission Control regression tests: PASS (2/2).
   - Full OTH test suite: PASS (100%, exit code 0, runtime ~40.6s).

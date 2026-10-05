@@ -511,6 +511,14 @@ def main(argv=None):
                     print(json.dumps({"status": "invalid", "error": str(exc)}, indent=2))
                     return
                 print(json.dumps(result, indent=2))
+            elif args.mission_cmd == "progress":
+                print(json.dumps(
+                    kernel.missions.progress_for_mission(
+                        args.mission_id,
+                        kernel.db.path,
+                    ) or {"status": "missing", "mission_id": args.mission_id},
+                    indent=2,
+                ))
             else:
                 print(json.dumps(
                     kernel.missions.timeline_for_mission(

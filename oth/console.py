@@ -259,6 +259,18 @@ class Handler(BaseHTTPRequestHandler):
             )
             self.json_response(200, {"mission_id": mission_id, "items": items})
             return
+        if self.path.startswith("/api/missions/") and self.path.endswith("/progress"):
+            mission_id = self.path.split("/")[3]
+            STORE.missions.reconcile(ROOT / "data" / "oth.db")
+            progress = STORE.missions.progress_for_mission(
+                mission_id,
+                ROOT / "data" / "oth.db",
+            )
+            if progress is None:
+                self.json_response(404, {"error": "mission not found", "mission_id": mission_id})
+                return
+            self.json_response(200, {"mission_id": mission_id, "progress": progress})
+            return
         if self.path.startswith("/api/conversations/") and self.path.endswith("/messages"):
             conversation_id = self.path.split("/")[3]
             self.json_response(200, {"items": STORE.messages(conversation_id)})

@@ -24,6 +24,7 @@ footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;displ
 .control-goal{font-weight:700}.control-status{font-size:12px;text-transform:uppercase;letter-spacing:.08em}
 .control-grid{display:grid;grid-template-columns:repeat(5,minmax(80px,1fr));gap:8px;margin-top:10px}
 .metric{padding:8px 10px;border:1px solid #242b33;border-radius:9px;background:#10151b}.metric b{display:block;font-size:16px}.metric span{font-size:11px;color:#89939e}
+.progress{margin-top:10px}.progress-track{height:8px;border-radius:999px;background:#171d24;overflow:hidden}.progress-fill{height:100%;background:#8de1b0;width:0;transition:width .2s}.progress-meta{display:flex;justify-content:space-between;margin-top:5px;font-size:11px;color:#89939e}
 .control-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.control-actions button[disabled]{opacity:.4;cursor:not-allowed}
 .timeline{margin-top:10px;display:grid;gap:6px;max-height:180px;overflow:auto}
 .timeline-item{display:flex;gap:8px;align-items:baseline;font-size:12px;padding:7px 9px;border:1px solid #20262e;border-radius:8px}
@@ -50,6 +51,10 @@ footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;displ
     <div id="missionStatus" class="control-status status"></div>
   </div>
   <div id="missionMetrics" class="control-grid"></div>
+  <div id="missionProgress" class="progress">
+    <div class="progress-track"><div id="missionProgressFill" class="progress-fill"></div></div>
+    <div class="progress-meta"><span id="missionProgressLabel">0% complete</span><span id="missionEta">ETA unavailable</span></div>
+  </div>
   <div id="missionActions" class="control-actions"></div>
   <div id="missionNotice"></div>
   <div id="missionTimeline" class="timeline"></div>
@@ -110,7 +115,7 @@ function renderControl(data){
   const panel=$('#control');
   if(!data || !data.mission){panel.hidden=true;return;}
   panel.hidden=false;
-  const m=data.mission, g=data.graph||{}, counts=g.counts||{}, deadline=data.deadline, escalation=data.escalation;
+  const m=data.mission, g=data.graph||{}, counts=g.counts||{}, deadline=data.deadline, escalation=data.escalation, progress=data.progress;
   $('#missionGoal').textContent=m.goal || 'Mission';
   const deadlineText=deadline
     ? ' · deadline '+deadline.at+' · '+deadline.status
@@ -121,6 +126,11 @@ function renderControl(data){
   $('#missionMeta').textContent='Mission '+m.id+' · latest task '+(m.latest_task_id||'none')+deadlineText+escalationText;
   $('#missionStatus').textContent=m.status+(deadline?.status==='overdue'?' · OVERDUE':'')+(escalation?.level==='critical'?' · CRITICAL':'')+(escalation?.level==='warning'?' · WARNING':'');
   $('#status').textContent='Mission '+m.status+' · '+(counts.total||0)+' tasks';
+  const pct=Math.max(0,Math.min(100,Number(progress?.percent||0)));
+  $('#missionProgressFill').style.width=pct+'%';
+  $('#missionProgressLabel').textContent=pct.toFixed(1)+'% complete · '+(progress?.completed||0)+'/'+(progress?.total||0)+' terminal';
+  const eta=progress?.eta_seconds;
+  $('#missionEta').textContent=eta==null?'ETA unavailable':('ETA ~'+Math.max(0,eta/60).toFixed(1)+' min');
 
   const metrics=$('#missionMetrics'); metrics.innerHTML='';
   [['Total',counts.total||0],['Queued',counts.queued||0],['Running',counts.running||0],['Blocked',counts.blocked||0],['Failed',counts.failed||0],['Cancelled',counts.cancelled||0]].forEach(([k,v])=>metrics.appendChild(metric(k,v)));

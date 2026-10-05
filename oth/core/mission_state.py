@@ -882,6 +882,86 @@ class MissionStateStore:
             "counts": counts,
         }
 
+    def progress_for_mission(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+    ) -> dict[str, Any] | None:
+        mission = self.get(mission_id)
+        if mission is None:
+            return None
+        graph = self.graph_for_mission(mission_id, task_db)
+        counts = dict(graph.get("counts") or {})
+        total = int(counts.get("total", 0))
+        succeeded = int(counts.get("succeeded", 0))
+        failed = int(counts.get("failed", 0))
+        cancelled = int(counts.get("cancelled", 0))
+        terminal = succeeded + failed + cancelled
+        active = int(counts.get("queued", 0)) + int(counts.get("running", 0)) + int(counts.get("blocked", 0))
+        percent = (terminal / total * 100.0) if total else 0.0
+
+        now_dt = datetime.now(timezone.utc)
+        created_dt = datetime.fromisoformat(
+            str(mission["created_at"]).replace("Z", "+00:00")
+        )
+        elapsed_seconds = max(0.0, (now_dt - created_dt).total_seconds())
+        observed_cycle_seconds = []
+        for node in graph.get("nodes", []):
+            if node.get("status") not in TERMINAL:
+                continue
+            try:
+                started = datetime.fromisoformat(
+                    str(node["created_at"]).replace("Z", "+00:00")
+                )
+                finished = datetime.fromisoformat(
+                    str(node["updated_at"]).replace("Z", "+00:00")
+                )
+                duration = (finished - started).total_seconds()
+            except (KeyError, TypeError, ValueError):
+                continue
+            if duration >= 0:
+                observed_cycle_seconds.append(duration)
+
+        average_cycle_seconds = (
+            sum(observed_cycle_seconds) / len(observed_cycle_seconds)
+            if observed_cycle_seconds else None
+        )
+        throughput_per_minute = (
+            terminal / (elapsed_seconds / 60.0)
+            if terminal and elapsed_seconds > 0
+            else None
+        )
+        eta_seconds = (
+            active * average_cycle_seconds
+            if active and average_cycle_seconds is not None
+            else None
+        )
+
+        return {
+            "total": total,
+            "completed": terminal,
+            "succeeded": succeeded,
+            "failed": failed,
+            "cancelled": cancelled,
+            "active": active,
+            "percent": round(percent, 2),
+            "elapsed_seconds": round(elapsed_seconds, 3),
+            "average_cycle_seconds": (
+                round(average_cycle_seconds, 3)
+                if average_cycle_seconds is not None else None
+            ),
+            "throughput_per_minute": (
+                round(throughput_per_minute, 4)
+                if throughput_per_minute is not None else None
+            ),
+            "eta_seconds": round(eta_seconds, 3) if eta_seconds is not None else None,
+            "eta_confidence": (
+                "observed_cycle"
+                if eta_seconds is not None
+                else "insufficient_history"
+            ),
+        }
+
     def control_snapshot(
         self,
         mission_id: str,
@@ -975,6 +1055,7 @@ class MissionStateStore:
             "mission": mission,
             "deadline": deadline,
             "escalation": escalation,
+            "progress": self.progress_for_mission(mission_id, task_db),
             "graph": graph,
             "timeline": timeline,
             "actions": actions,
