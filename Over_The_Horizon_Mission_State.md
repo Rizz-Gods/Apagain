@@ -273,11 +273,35 @@ Previous subsystem: Mission Progress and ETA — complete and live-validated
   - Live audit contained `mission.created`, `mission.deadline.set`, and `attention.acknowledge`.
   - Disposable audit/mission/timeline rows were removed after validation; remaining ledger integrity stayed valid.
 
+- Mission Forensics and Replay subsystem:
+  - Reconstructs a mission as a bounded chronological evidence stream from mission timeline events, underlying task events, and operator audit entries.
+  - Replay includes mission state, reachable task graph, audit integrity, evidence counts, time bounds, source/kind summaries, and deterministic sequence numbers.
+  - Read-only CLI: python -m oth.cli mission replay <mission_id> --limit N.
+  - Console API: GET /api/missions/{mission_id}/replay.
+  - Mission Control loads replay through the dedicated endpoint without inflating the normal control snapshot.
+  - Documentation: docs/MISSION_REPLAY.md.
+
+### Verification achieved
+- Mission Forensics and Replay focused suite: PASS (5/5).
+- Mission Replay + Audit focused regression: PASS (10/10).
+- Full OTH pytest suite after implementation: PASS (100%, exit code 0, runtime 24.09s).
+- Pycompile and git diff --check: PASS.
+- Live Console replay validation: PASS.
+  - Existing Console restarted on port 18765.
+  - Disposable live mission reconstructed mission + audit evidence with valid integrity.
+  - Three-stream validation reconstructed mission timeline + task event + operator audit in one replay.
+  - Replay exposed all three sources: mission, task_event, and audit.
+  - Task event and audit records were both present.
+  - Disposable mission, timeline, audit, and task/event rows were removed after validation.
+  - A disposable cleanup helper initially referenced a nonexistent DB method; cleanup was then completed directly and the workspace was rechecked clean.
+
 ### Current uncompleted item
-None. Mission Operator Audit Ledger is complete and live-validated.
+None. Mission Forensics and Replay is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, Mission Control Plane, Mission Cancellation and Graceful Intervention, Mission Deadline and Watchdog, Mission SLA Escalation, Mission Progress and ETA, Mission Attention Inbox, or Mission Operator Audit Ledger unless a regression appears. Continue with the next coherent OTH subsystem using these established layers as infrastructure.
+Do not rebuild the established mission subsystems unless a regression appears. Continue with the next coherent OTH subsystem using the completed layers as infrastructure.
+
+
 
 
 ## Repository

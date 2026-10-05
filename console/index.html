@@ -60,6 +60,9 @@ footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;displ
   <div id="missionAttention" class="attention"></div>
   <div id="missionNotice"></div>
   <div id="missionTimeline" class="timeline"></div>
+  <div class="small" style="margin-top:10px">Forensic replay</div>
+  <div id="missionReplayMeta" class="small"></div>
+  <div id="missionReplay" class="timeline"></div>
   <div class="small" style="margin-top:10px">Operator audit ledger</div>
   <div id="missionAudit" class="timeline"></div>
 </section>
@@ -173,6 +176,8 @@ function renderControl(data){
 
   const notice=$('#missionNotice'); notice.innerHTML='';
   const timeline=$('#missionTimeline'); timeline.innerHTML='';
+  const replayBox=$('#missionReplay'); replayBox.innerHTML='';
+  $('#missionReplayMeta').textContent='Loading forensic replay…';
   const auditBox=$('#missionAudit'); auditBox.innerHTML='';
   (data.audit||[]).slice(-6).reverse().forEach(item=>{
     const row=document.createElement('div'); row.className='timeline-item';
@@ -192,12 +197,30 @@ function renderControl(data){
   });
 }
 
+async function loadMissionReplay(missionId){
+  if(!missionId)return null;
+  const replay=await api('/api/missions/'+missionId+'/replay');
+  if(replay.error)return null;
+  const box=$('#missionReplay'); box.innerHTML='';
+  $('#missionReplayMeta').textContent='Replay '+replay.timeline_count+' timeline events + '+replay.audit_count+' audit decisions · integrity '+(replay.audit_integrity?.valid?'valid':'BROKEN');
+  (replay.replay||[]).slice(-8).reverse().forEach(item=>{
+    const row=document.createElement('div'); row.className='timeline-item';
+    const seq=document.createElement('span'); seq.className='kind'; seq.textContent='#'+item.sequence;
+    const kind=document.createElement('span'); kind.textContent=item.kind;
+    const source=document.createElement('span'); source.textContent=item.source;
+    const time=document.createElement('span'); time.className='time'; time.textContent=item.created_at||'';
+    row.append(seq,kind,source,time); box.appendChild(row);
+  });
+  return replay;
+}
+
 async function refreshMissionControl(missionId){
   if(!missionId)return null;
   const data=await api('/api/missions/'+missionId+'/control');
   if(data.error){return null;}
   currentMissionId=missionId;
   renderControl(data);
+  loadMissionReplay(missionId);
   return data;
 }
 

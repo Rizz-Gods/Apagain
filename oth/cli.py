@@ -114,6 +114,9 @@ def main(argv=None):
     mission_audit.add_argument("mission_id")
     mission_audit.add_argument("--limit", type=int, default=100)
     mission_audit.add_argument("--verify", action="store_true")
+    mission_replay = mission_sub.add_parser("replay")
+    mission_replay.add_argument("mission_id")
+    mission_replay.add_argument("--limit", type=int, default=500)
     mission_cancel = mission_sub.add_parser("cancel")
     mission_cancel.add_argument("mission_id")
     mission_cancel.add_argument("--task-id", action="append")
@@ -535,6 +538,15 @@ def main(argv=None):
                 if args.verify:
                     payload["integrity"] = kernel.missions.verify_audit_chain(args.mission_id)
                 print(json.dumps(payload, indent=2))
+            elif args.mission_cmd == "replay":
+                print(json.dumps(
+                    kernel.missions.replay_for_mission(
+                        args.mission_id,
+                        kernel.db.path,
+                        limit=args.limit,
+                    ) or {"status": "missing", "mission_id": args.mission_id},
+                    indent=2,
+                ))
             elif args.mission_cmd == "progress":
                 print(json.dumps(
                     kernel.missions.progress_for_mission(

@@ -521,6 +521,108 @@ class MissionStateStore:
         items.sort(key=lambda item: (str(item.get("created_at") or ""), int(item.get("id") or 0)))
         return items[-limit:]
 
+
+    def replay_for_mission(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+        limit: int = 500,
+    ) -> dict[str, Any] | None:
+        """Build a deterministic, read-only forensic replay from durable evidence."""
+        mission = self.get(mission_id)
+        if mission is None:
+            return None
+
+        limit = max(1, min(int(limit), 1000))
+        graph = self.graph_for_mission(mission_id, task_db)
+        timeline = self.timeline_for_mission(
+            mission_id,
+            limit=limit,
+            task_db=task_db,
+        )
+        audit = self.audit_for_mission(mission_id, limit=limit)
+        integrity = self.verify_audit_chain(mission_id)
+
+        replay: list[dict[str, Any]] = []
+        for item in timeline:
+            replay.append({
+                "source": item.get("source", "mission"),
+                "id": item.get("id"),
+                "mission_id": mission_id,
+                "task_id": item.get("task_id"),
+                "kind": item.get("kind"),
+                "status": item.get("status"),
+                "payload": item.get("payload") or {},
+                "created_at": item.get("created_at"),
+            })
+        for item in audit:
+            replay.append({
+                "source": "audit",
+                "id": item.get("id"),
+                "mission_id": mission_id,
+                "task_id": item.get("task_id"),
+                "kind": f"audit.{item.get('action')}",
+                "status": item.get("result"),
+                "payload": {
+                    "actor": item.get("actor"),
+                    "result": item.get("result"),
+                    **(item.get("payload") or {}),
+                },
+                "created_at": item.get("created_at"),
+            })
+
+        replay.sort(
+            key=lambda item: (
+                str(item.get("created_at") or ""),
+                0 if item.get("source") == "mission" else 1,
+                int(item.get("id") or 0),
+            )
+        )
+        replay = replay[-limit:]
+
+        first_seen = replay[0]["created_at"] if replay else mission.get("created_at")
+        last_seen = replay[-1]["created_at"] if replay else mission.get("updated_at")
+        duration_seconds = None
+        if first_seen and last_seen:
+            try:
+                start = datetime.fromisoformat(str(first_seen).replace("Z", "+00:00"))
+                end = datetime.fromisoformat(str(last_seen).replace("Z", "+00:00"))
+                duration_seconds = max(0.0, (end - start).total_seconds())
+            except ValueError:
+                duration_seconds = None
+
+        by_source: dict[str, int] = {}
+        by_kind: dict[str, int] = {}
+        for item in replay:
+            source = str(item.get("source") or "unknown")
+            kind = str(item.get("kind") or "unknown")
+            by_source[source] = by_source.get(source, 0) + 1
+            by_kind[kind] = by_kind.get(kind, 0) + 1
+
+        return {
+            "mission_id": mission_id,
+            "mission": mission,
+            "graph": graph,
+            "audit_integrity": integrity,
+            "audit_count": len(audit),
+            "timeline_count": len(timeline),
+            "replay_count": len(replay),
+            "summary": {
+                "first_event_at": first_seen,
+                "last_event_at": last_seen,
+                "duration_seconds": duration_seconds,
+                "by_source": by_source,
+                "top_kinds": sorted(
+                    by_kind.items(),
+                    key=lambda item: (-item[1], item[0]),
+                )[:20],
+            },
+            "replay": [
+                {**item, "sequence": index + 1}
+                for index, item in enumerate(replay)
+            ],
+        }
+
     def create(
         self,
         conversation_id: str,

@@ -281,6 +281,18 @@ class Handler(BaseHTTPRequestHandler):
             items = STORE.missions.list_audit(limit=100, mission_id=mission_id)
             self.json_response(200, {"items": items, "integrity": STORE.missions.verify_audit_chain()})
             return
+        if self.path.startswith("/api/missions/") and self.path.endswith("/replay"):
+            mission_id = self.path.split("/")[3]
+            replay = STORE.missions.replay_for_mission(
+                mission_id,
+                ROOT / "data" / "oth.db",
+                limit=500,
+            )
+            if replay is None:
+                self.json_response(404, {"error": "mission not found", "mission_id": mission_id})
+                return
+            self.json_response(200, replay)
+            return
         if self.path.startswith("/api/missions/") and self.path.endswith("/progress"):
             mission_id = self.path.split("/")[3]
             STORE.missions.reconcile(ROOT / "data" / "oth.db")
