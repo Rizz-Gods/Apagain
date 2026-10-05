@@ -114,6 +114,11 @@ def main(argv=None):
     mission_cancel.add_argument("mission_id")
     mission_cancel.add_argument("--task-id", action="append")
     mission_cancel.add_argument("--reason", default="operator_cancel")
+    mission_deadline = mission_sub.add_parser("deadline")
+    mission_deadline.add_argument("mission_id")
+    deadline_group = mission_deadline.add_mutually_exclusive_group(required=True)
+    deadline_group.add_argument("--at")
+    deadline_group.add_argument("--clear", action="store_true")
     opp = sub.add_parser("opportunities")
     opp_sub = opp.add_subparsers(dest="opp_cmd", required=True)
     opp_list = opp_sub.add_parser("list")
@@ -467,6 +472,16 @@ def main(argv=None):
                     ),
                     indent=2,
                 ))
+            elif args.mission_cmd == "deadline":
+                try:
+                    result = kernel.missions.set_deadline(
+                        args.mission_id,
+                        None if args.clear else args.at,
+                    )
+                except ValueError as exc:
+                    print(json.dumps({"status": "invalid", "error": str(exc)}, indent=2))
+                    return
+                print(json.dumps(result, indent=2))
             else:
                 print(json.dumps(
                     kernel.missions.timeline_for_mission(

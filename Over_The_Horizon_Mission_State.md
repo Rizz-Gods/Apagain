@@ -1,10 +1,10 @@
 # Over The Horizon — Mission State
 
-## Current subsystem: Mission Cancellation and Graceful Intervention
+## Current subsystem: Mission Deadline and Watchdog
 
 Status: SUBSYSTEM COMPLETE AND LIVE-VALIDATED
 
-Previous subsystem: Mission Control Plane / Operator Command Center — complete and live-validated
+Previous subsystem: Mission Cancellation and Graceful Intervention — complete and live-validated
 
 ### Completed
 - Native local engineering worker: `ollama-engineer`
@@ -180,6 +180,16 @@ Previous subsystem: Mission Control Plane / Operator Command Center — complete
   - Reconciliation persisted a durable `completed_at` timestamp for the first terminal cancellation transition.
   - Disposable mission/task/timeline rows were removed after validation.
   - Console was restarted from the intended VBS startup path after the final source fix.
+- Mission Deadline and Watchdog verification: PASS
+  - Focused deadline suite: PASS (3/3).
+  - Full OTH pytest suite: PASS (100%, exit code 0, runtime ~22.2s).
+  - Existing mission databases migrated in place with deadline/watchdog columns.
+  - Real Console deadline API accepted a past deadline and the mission became `watchdog_status=overdue`.
+  - Unified control response exposed the deadline timestamp, watchdog state, and overdue duration.
+  - Mission timeline recorded `mission.deadline_set` and `mission.deadline_exceeded`.
+  - Daemon runner invokes the watchdog each cycle without mutating task execution state.
+  - Disposable mission/task/timeline rows were removed after validation.
+  - Documentation: `docs/MISSION_DEADLINE.md`.
 - Mission Control Plane verification: PASS
   - Focused Mission Control regression tests: PASS (2/2).
   - Full OTH test suite: PASS (100%, exit code 0, runtime ~40.6s).
@@ -209,10 +219,10 @@ Previous subsystem: Mission Control Plane / Operator Command Center — complete
   `wscript.exe "...\\Startup\\OTH-Daemon.vbs"`
 
 ### Current uncompleted item
-None. Mission Cancellation and Graceful Intervention is complete and live-validated.
+None. Mission Deadline and Watchdog is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, or Mission Control Plane unless a regression appears. Continue with the next coherent OTH subsystem using all nine as established infrastructure.
+Do not rebuild Engineering Execution Reliability, Mission Continuity, Mission Graph Continuity, Mission Recovery Reconciliation, Mission Resume and Retry Control, Mission Approval Continuity, Mission Observability, Mission Control Plane, or Mission Cancellation and Graceful Intervention unless a regression appears. Continue with the next coherent OTH subsystem using all ten as established infrastructure.
 
 ## Repository
 Primary OTH directory:

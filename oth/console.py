@@ -362,6 +362,26 @@ class Handler(BaseHTTPRequestHandler):
             self.json_response(400, {"error": f"invalid json: {exc}"})
             return
 
+        if self.path.startswith("/api/missions/") and self.path.endswith("/deadline"):
+            mission_id = self.path.split("/")[3]
+            try:
+                if "deadline_at" not in body:
+                    raise ValueError("deadline_at is required; use null to clear the deadline")
+                result = STORE.missions.set_deadline(
+                    mission_id,
+                    body.get("deadline_at"),
+                )
+            except ValueError as exc:
+                self.json_response(400, {"error": str(exc)})
+                return
+            status = 200 if result.get("status") != "missing" else 404
+            snapshot = STORE.missions.control_snapshot(
+                mission_id,
+                ROOT / "data" / "oth.db",
+            )
+            self.json_response(status, {"result": result, "control": snapshot})
+            return
+
         if self.path.startswith("/api/missions/") and self.path.endswith("/control"):
             mission_id = self.path.split("/")[3]
             action = str(body.get("action", "")).strip().lower()

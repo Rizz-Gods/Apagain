@@ -57,6 +57,20 @@ class MissionStateStore:
                 ON mission_timeline(mission_id, id);
             """
         )
+        existing_columns = {
+            row["name"]
+            for row in self.db.execute("PRAGMA table_info(missions)").fetchall()
+        }
+        migrations = (
+            ("deadline_at", "TEXT"),
+            ("watchdog_status", "TEXT NOT NULL DEFAULT 'ok'"),
+            ("watchdog_checked_at", "TEXT"),
+        )
+        for column, definition in migrations:
+            if column not in existing_columns:
+                self.db.execute(
+                    f"ALTER TABLE missions ADD COLUMN {column} {definition}"
+                )
         self.db.commit()
 
     def close(self) -> None:
@@ -165,8 +179,9 @@ class MissionStateStore:
             """
             INSERT INTO missions
             (id,conversation_id,goal,strategy,root_task_ids,status,
-             latest_task_id,latest_outcome,created_at,updated_at,completed_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)
+             latest_task_id,latest_outcome,created_at,updated_at,completed_at,
+             deadline_at,watchdog_status,watchdog_checked_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 mission_id,
@@ -180,6 +195,9 @@ class MissionStateStore:
                 now,
                 now,
                 None,
+                None,
+                "ok",
+                now,
             ),
         )
         self.db.commit()
@@ -191,6 +209,134 @@ class MissionStateStore:
             created_at=now,
         )
         return self.get(mission_id) or {}
+
+    def set_deadline(
+        self,
+        mission_id: str,
+        deadline_at: str | None,
+    ) -> dict[str, Any]:
+        mission = self.get(mission_id)
+        if mission is None:
+            return {"status": "missing", "mission_id": mission_id}
+        normalized = None
+        if deadline_at:
+            try:
+                parsed = datetime.fromisoformat(
+                    str(deadline_at).replace("Z", "+00:00")
+                )
+            except ValueError as exc:
+                raise ValueError("deadline_at must be an ISO-8601 timestamp") from exc
+            if parsed.tzinfo is None:
+                raise ValueError("deadline_at must include a timezone offset")
+            normalized = parsed.astimezone(timezone.utc).isoformat()
+
+        now = now_iso()
+        next_status = "ok"
+        self.db.execute(
+            """
+            UPDATE missions
+            SET deadline_at=?, watchdog_status=?, watchdog_checked_at=?, updated_at=?
+            WHERE id=?
+            """,
+            (normalized, next_status, now, now, mission_id),
+        )
+        self.db.commit()
+        self.add_timeline_event(
+            mission_id,
+            "mission.deadline_cleared" if normalized is None else "mission.deadline_set",
+            {"deadline_at": normalized},
+            status=mission["status"],
+            created_at=now,
+        )
+        self.watchdog_for_mission(mission_id, task_db=None, now=now)
+        return self.get(mission_id) or {}
+
+    def watchdog_for_mission(
+        self,
+        mission_id: str,
+        task_db: str | Path | None,
+        now: str | None = None,
+    ) -> dict[str, Any] | None:
+        mission = self.get(mission_id)
+        if mission is None:
+            return None
+        if not mission.get("deadline_at") or mission.get("status") in TERMINAL:
+            return mission
+        current = datetime.fromisoformat(
+            str(now or now_iso()).replace("Z", "+00:00")
+        )
+        deadline = datetime.fromisoformat(
+            str(mission["deadline_at"]).replace("Z", "+00:00")
+        )
+        if current.tzinfo is None or deadline.tzinfo is None:
+            return mission
+        overdue = current >= deadline
+        next_status = "overdue" if overdue else "ok"
+        if mission.get("watchdog_status") == next_status:
+            self.db.execute(
+                "UPDATE missions SET watchdog_checked_at=? WHERE id=?",
+                (current.astimezone(timezone.utc).isoformat(), mission_id),
+            )
+            self.db.commit()
+            return self.get(mission_id) or mission
+        checked_at = current.astimezone(timezone.utc).isoformat()
+        outcome = dict(mission.get("latest_outcome") or {})
+        if overdue:
+            outcome["deadline_exceeded"] = mission["deadline_at"]
+        else:
+            outcome.pop("deadline_exceeded", None)
+        self.db.execute(
+            """
+            UPDATE missions
+            SET watchdog_status=?, watchdog_checked_at=?, latest_outcome=?, updated_at=?
+            WHERE id=?
+            """,
+            (
+                next_status,
+                checked_at,
+                json.dumps(outcome, ensure_ascii=False),
+                checked_at,
+                mission_id,
+            ),
+        )
+        self.db.commit()
+        self.add_timeline_event(
+            mission_id,
+            "mission.deadline_exceeded" if overdue else "mission.deadline_cleared",
+            {
+                "deadline_at": mission["deadline_at"],
+                "watchdog_status": next_status,
+            },
+            status=mission["status"],
+            created_at=checked_at,
+        )
+        return self.get(mission_id) or mission
+
+    def watchdog(
+        self,
+        task_db: str | Path,
+        now: str | None = None,
+    ) -> dict[str, int]:
+        rows = self.db.execute(
+            """
+            SELECT id FROM missions
+            WHERE deadline_at IS NOT NULL
+              AND status IN ('queued','running','blocked')
+            ORDER BY updated_at ASC
+            """
+        ).fetchall()
+        checked = 0
+        overdue = 0
+        for row in rows:
+            checked += 1
+            mission = self.watchdog_for_mission(
+                row["id"],
+                task_db,
+                now=now,
+            )
+            if mission and mission.get("watchdog_status") == "overdue":
+                overdue += 1
+        return {"checked": checked, "overdue": overdue}
 
     def attach_root_tasks(self, mission_id: str, root_task_ids: list[str]) -> dict[str, Any]:
         now = now_iso()
@@ -641,6 +787,7 @@ class MissionStateStore:
         timeline_limit: int = 120,
     ) -> dict[str, Any] | None:
         """Return the unified operator view of one mission without executing actions."""
+        self.watchdog(task_db)
         self.reconcile(task_db)
         mission = self.get(mission_id)
         if mission is None:
@@ -699,9 +846,26 @@ class MissionStateStore:
                 "reason": "Reconcile mission state and reload the control surface.",
             },
         ]
+        deadline = None
+        if mission.get("deadline_at"):
+            now_dt = datetime.now(timezone.utc)
+            deadline_dt = datetime.fromisoformat(
+                str(mission["deadline_at"]).replace("Z", "+00:00")
+            )
+            overdue_seconds = max(
+                0.0,
+                (now_dt - deadline_dt).total_seconds(),
+            )
+            deadline = {
+                "at": mission["deadline_at"],
+                "status": mission.get("watchdog_status", "ok"),
+                "checked_at": mission.get("watchdog_checked_at"),
+                "overdue_seconds": overdue_seconds,
+            }
         return {
             "mission_id": mission_id,
             "mission": mission,
+            "deadline": deadline,
             "graph": graph,
             "timeline": timeline,
             "actions": actions,
@@ -757,6 +921,9 @@ class MissionStateStore:
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "completed_at": row["completed_at"],
+            "deadline_at": row["deadline_at"] if "deadline_at" in row.keys() else None,
+            "watchdog_status": row["watchdog_status"] if "watchdog_status" in row.keys() else "ok",
+            "watchdog_checked_at": row["watchdog_checked_at"] if "watchdog_checked_at" in row.keys() else None,
         }
 
     def _graph_summary(self, root_ids: list[str]) -> str:

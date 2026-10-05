@@ -110,10 +110,13 @@ function renderControl(data){
   const panel=$('#control');
   if(!data || !data.mission){panel.hidden=true;return;}
   panel.hidden=false;
-  const m=data.mission, g=data.graph||{}, counts=g.counts||{};
+  const m=data.mission, g=data.graph||{}, counts=g.counts||{}, deadline=data.deadline;
   $('#missionGoal').textContent=m.goal || 'Mission';
-  $('#missionMeta').textContent='Mission '+m.id+' · latest task '+(m.latest_task_id||'none');
-  $('#missionStatus').textContent=m.status;
+  const deadlineText=deadline
+    ? ' · deadline '+deadline.at+' · '+deadline.status
+    : ' · no deadline';
+  $('#missionMeta').textContent='Mission '+m.id+' · latest task '+(m.latest_task_id||'none')+deadlineText;
+  $('#missionStatus').textContent=m.status+(deadline?.status==='overdue'?' · OVERDUE':'');
   $('#status').textContent='Mission '+m.status+' · '+(counts.total||0)+' tasks';
 
   const metrics=$('#missionMetrics'); metrics.innerHTML='';
