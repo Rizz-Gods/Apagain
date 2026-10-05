@@ -33,6 +33,7 @@ class OTHRunner:
             self.kernel.db.path,
             now=now.isoformat(),
         )
+        self.kernel.missions.check_integrity_all(self.kernel.db.path)
         self.scheduler.tick(self.kernel)
         queued = [t for t in self.kernel.tasks() if t["status"] == "queued"]
         if not queued:

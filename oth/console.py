@@ -267,6 +267,15 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.json_response(200, {"mission_id": mission_id, "budget": budget})
             return
+        if self.path.startswith("/api/missions/") and self.path.endswith("/integrity"):
+            mission_id = self.path.split("/")[3]
+            integrity = STORE.missions.integrity_for_mission(mission_id, ROOT / "data" / "oth.db")
+            history = STORE.missions.integrity_history(mission_id, limit=50) if integrity else []
+            if integrity is None:
+                self.json_response(404, {"error": "mission not found", "mission_id": mission_id})
+                return
+            self.json_response(200, {"mission_id": mission_id, "integrity": integrity, "history": history})
+            return
         if self.path.startswith("/api/missions/") and self.path.endswith("/policy"):
             mission_id = self.path.split("/")[3]
             policy = STORE.missions.policy_for_mission(mission_id)

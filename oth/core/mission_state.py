@@ -103,6 +103,16 @@ class MissionStateStore:
             );
             CREATE INDEX IF NOT EXISTS idx_mission_policy_mission
                 ON mission_policy_revisions(mission_id, revision);
+            CREATE TABLE IF NOT EXISTS mission_integrity_checks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mission_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                checked_at TEXT NOT NULL,
+                violations_json TEXT NOT NULL DEFAULT '[]',
+                fingerprint TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_mission_integrity_mission
+                ON mission_integrity_checks(mission_id, id);
             """
         )
         existing_columns = {
@@ -405,6 +415,205 @@ class MissionStateStore:
         )
         return revision
 
+    def integrity_for_mission(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+    ) -> dict[str, Any] | None:
+        mission = self.get(mission_id)
+        if mission is None:
+            return None
+        graph = self.graph_for_mission(mission_id, task_db)
+        counts = dict(graph.get("counts") or {})
+        violations: list[dict[str, Any]] = []
+        task_count = int(counts.get("total", 0))
+        aggregate = self._aggregate_task_graph(
+            mission["root_task_ids"],
+            str(task_db),
+            fallback=mission["status"],
+        ) if task_count else mission["status"]
+        if task_count and aggregate != mission["status"]:
+            violations.append({
+                "code": "mission_status_mismatch",
+                "mission_status": mission["status"],
+                "graph_status": aggregate,
+            })
+        active = (
+            int(counts.get("queued", 0))
+            + int(counts.get("running", 0))
+            + int(counts.get("blocked", 0))
+        )
+        if mission["status"] in TERMINAL and active:
+            violations.append({
+                "code": "terminal_with_active_tasks",
+                "status": mission["status"],
+                "active": active,
+            })
+        if mission["status"] in TERMINAL and not mission.get("completed_at"):
+            violations.append({"code": "terminal_without_completed_at"})
+        if mission["status"] not in TERMINAL and mission.get("completed_at"):
+            violations.append({"code": "active_with_completed_at"})
+        roots = list(mission.get("root_task_ids") or [])
+        graph_ids = {str(node["id"]) for node in graph.get("nodes", [])}
+        missing_roots = [root for root in roots if str(root) not in graph_ids]
+        if missing_roots:
+            violations.append({
+                "code": "missing_root_tasks",
+                "task_ids": missing_roots,
+            })
+        latest_task_id = mission.get("latest_task_id")
+        if latest_task_id and str(latest_task_id) not in graph_ids:
+            violations.append({
+                "code": "latest_task_missing_from_graph",
+                "task_id": latest_task_id,
+            })
+
+        budget = self.budget_for_mission(mission_id, task_db)
+        if budget and mission.get("budget_status") != budget["status"]:
+            violations.append({
+                "code": "budget_status_mismatch",
+                "mission_status": mission.get("budget_status"),
+                "computed_status": budget["status"],
+            })
+
+        policy = self.policy_for_mission(mission_id)
+        if policy:
+            if int(mission.get("policy_revision", 1)) != int(policy["revision"]):
+                violations.append({
+                    "code": "policy_revision_mismatch",
+                    "mission_revision": mission.get("policy_revision"),
+                    "stored_revision": policy["revision"],
+                })
+            if mission.get("policy_hash") != policy["hash"]:
+                violations.append({
+                    "code": "policy_hash_mismatch",
+                    "mission_hash": mission.get("policy_hash"),
+                    "stored_hash": policy["hash"],
+                })
+
+        audit_integrity = self.verify_audit_chain(mission_id)
+        if not audit_integrity["valid"]:
+            violations.append({
+                "code": "audit_chain_invalid",
+                "detail": audit_integrity,
+            })
+
+        status = "violated" if violations else "healthy"
+        checked_at = now_iso()
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                violations,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+        ).hexdigest()
+        return {
+            "mission_id": mission_id,
+            "status": status,
+            "checked_at": checked_at,
+            "violations": violations,
+            "fingerprint": fingerprint,
+            "task_count": task_count,
+            "active_task_count": active,
+            "graph_status": aggregate,
+            "budget": budget,
+            "policy_revision": policy["revision"] if policy else None,
+            "policy_hash": policy["hash"] if policy else None,
+            "audit_integrity": audit_integrity,
+        }
+
+    def check_integrity(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+    ) -> dict[str, Any] | None:
+        report = self.integrity_for_mission(mission_id, task_db)
+        if report is None:
+            return None
+        previous = self.db.execute(
+            "SELECT fingerprint FROM mission_integrity_checks "
+            "WHERE mission_id=? ORDER BY id DESC LIMIT 1",
+            (mission_id,),
+        ).fetchone()
+        previous_fingerprint = previous["fingerprint"] if previous else None
+        self.db.execute(
+            "INSERT INTO mission_integrity_checks "
+            "(mission_id,status,checked_at,violations_json,fingerprint) "
+            "VALUES(?,?,?,?,?)",
+            (
+                mission_id,
+                report["status"],
+                report["checked_at"],
+                json.dumps(report["violations"], ensure_ascii=False),
+                report["fingerprint"],
+            ),
+        )
+        self.db.commit()
+        if report["violations"] and report["fingerprint"] != previous_fingerprint:
+            summary = "; ".join(
+                str(item.get("code", "unknown"))
+                for item in report["violations"]
+            )
+            self.add_timeline_event(
+                mission_id,
+                "mission.integrity_violation",
+                {
+                    "summary": summary,
+                    "violations": report["violations"],
+                    "fingerprint": report["fingerprint"],
+                },
+                status=report["status"],
+                created_at=report["checked_at"],
+            )
+        return report
+
+    def check_integrity_all(
+        self,
+        task_db: str | Path,
+    ) -> dict[str, Any]:
+        rows = self.db.execute(
+            "SELECT id FROM missions ORDER BY updated_at ASC"
+        ).fetchall()
+        healthy = 0
+        violated = 0
+        for row in rows:
+            report = self.check_integrity(row["id"], task_db)
+            if not report:
+                continue
+            if report["status"] == "violated":
+                violated += 1
+            else:
+                healthy += 1
+        return {
+            "checked": healthy + violated,
+            "healthy": healthy,
+            "violated": violated,
+        }
+
+    def integrity_history(
+        self,
+        mission_id: str,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 200))
+        rows = self.db.execute(
+            "SELECT * FROM mission_integrity_checks "
+            "WHERE mission_id=? ORDER BY id DESC LIMIT ?",
+            (mission_id, limit),
+        ).fetchall()
+        return [
+            {
+                "id": int(row["id"]),
+                "mission_id": row["mission_id"],
+                "status": row["status"],
+                "checked_at": row["checked_at"],
+                "violations": json.loads(row["violations_json"] or "[]"),
+                "fingerprint": row["fingerprint"],
+            }
+            for row in reversed(rows)
+        ]
+
     def add_audit_event(
         self,
         mission_id: str,
@@ -628,6 +837,12 @@ class MissionStateStore:
                 "severity": "critical",
                 "title": "Task requires operator attention",
                 "detail": str(payload.get("reason") or "Task execution requires attention."),
+            }
+        if kind == "mission.integrity_violation":
+            return {
+                "severity": "critical",
+                "title": "Mission state integrity violation",
+                "detail": str(payload.get("summary") or "Mission state invariants failed; operator review required."),
             }
         if kind == "mission.budget_exhausted":
             return {
@@ -2031,6 +2246,7 @@ class MissionStateStore:
         audit = self.audit_for_mission(mission_id, limit=50)
         audit_integrity = self.verify_audit_chain(mission_id)
         policy = self.policy_for_mission(mission_id)
+        integrity = self.check_integrity(mission_id, task_db)
         open_attention = self.attention_for_mission(
             mission_id,
             limit=200,
@@ -2048,6 +2264,7 @@ class MissionStateStore:
             "audit": audit,
             "audit_integrity": audit_integrity,
             "policy": policy,
+            "integrity": integrity,
             "graph": graph,
             "timeline": timeline,
             "actions": actions,

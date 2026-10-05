@@ -352,11 +352,38 @@ Previous subsystem: Mission Progress and ETA — complete and live-validated
   - Audit integrity remained valid.
   - Disposable mission/task/revision/timeline/audit rows were removed after validation.
 
+- Mission Integrity Monitoring subsystem:
+  - Continuous invariant checks run on every OTH daemon cycle after mission reconciliation/watchdog processing.
+  - Checks mission/task graph consistency, terminal-state correctness, root/latest task reachability, budget status, policy revision/hash consistency, and audit-chain integrity.
+  - Durable history in `mission_integrity_checks`.
+  - Repeated identical violations are fingerprint-deduplicated.
+  - New violations create critical `mission.integrity_violation` attention and timeline evidence without automatic repair.
+  - CLI: `python -m oth.cli mission integrity <mission_id> [--history N]`.
+  - Console API: `GET /api/missions/{mission_id}/integrity`.
+  - Mission Control exposes live integrity status.
+  - Documentation: `docs/MISSION_INTEGRITY.md`.
+
+### Verification achieved
+- Mission Integrity Monitoring focused suite: PASS (5/5).
+- Integrity + Governance + Budget focused suite: PASS (16/16).
+- Full OTH pytest suite after integrity implementation: PASS (100%, exit code 0, runtime 45.02s).
+- Pycompile and `git diff --check`: PASS.
+- Live integrity proof: PASS.
+  - Healthy disposable mission reported `healthy`.
+  - Deliberate policy-hash corruption reported `violated`.
+  - Violation code: `policy_hash_mismatch`.
+  - Repeated identical check preserved the same fingerprint and created only one integrity violation timeline/attention event.
+  - Console integrity API reported `violated`.
+  - Unified Mission Control reported `violated`.
+  - Integrity history persisted the checks.
+  - Disposable integrity/revision/timeline/audit/attention/mission rows were removed after validation.
+  - No automatic state repair occurred.
+
 ### Current uncompleted item
-None. Mission Policy Versioning and Governance is complete and live-validated.
+None. Mission Integrity Monitoring is complete and live-validated.
 
 ### Next continuation point
-Do not rebuild the established mission subsystems unless a regression appears. Continue with the next coherent OTH subsystem using the completed governance, control, evidence, and guardrail layers as infrastructure.
+Do not rebuild the established mission subsystems unless a regression appears. Continue with the next coherent OTH subsystem using governance, guardrails, control, evidence, replay, and integrity monitoring as infrastructure.
 
 
 

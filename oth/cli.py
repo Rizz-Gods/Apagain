@@ -141,6 +141,9 @@ def main(argv=None):
     mission_policy.add_argument("--external-approval", choices=["required", "not-required"])
     mission_policy.add_argument("--financial-approval", choices=["required", "not-required"])
     mission_policy.add_argument("--reason", default="operator_policy_update")
+    mission_integrity = mission_sub.add_parser("integrity")
+    mission_integrity.add_argument("mission_id")
+    mission_integrity.add_argument("--history", type=int, default=20)
 
     attention = sub.add_parser("attention")
     attention_sub = attention.add_subparsers(dest="attention_cmd", required=True)
@@ -548,6 +551,15 @@ def main(argv=None):
                 if args.verify:
                     payload["integrity"] = kernel.missions.verify_audit_chain(args.mission_id)
                 print(json.dumps(payload, indent=2))
+            elif args.mission_cmd == "integrity":
+                report = kernel.missions.check_integrity(args.mission_id, kernel.db.path)
+                if report is None:
+                    print(json.dumps({"status": "missing", "mission_id": args.mission_id}, indent=2))
+                else:
+                    print(json.dumps({
+                        "integrity": report,
+                        "history": kernel.missions.integrity_history(args.mission_id, args.history),
+                    }, indent=2))
             elif args.mission_cmd == "policy":
                 if args.external_approval is None and args.financial_approval is None:
                     print(json.dumps(kernel.missions.policy_for_mission(args.mission_id) or {"status": "missing", "mission_id": args.mission_id}, indent=2))
