@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 
-TERMINAL = {"succeeded", "failed"}
+TERMINAL = {"succeeded", "failed", "cancelled"}
 ACTIVE = {"queued", "running", "blocked"}
 
 
@@ -376,6 +376,156 @@ class MissionStateStore:
             "status": refreshed["status"],
         }
 
+    def cancel_mission(
+        self,
+        mission_id: str,
+        task_db: str | Path,
+        task_ids: list[str] | None = None,
+        reason: str = "operator_cancel",
+    ) -> dict[str, Any]:
+        mission = self.get(mission_id)
+        if mission is None:
+            return {
+                "mission_id": mission_id,
+                "status": "missing",
+                "cancelled": [],
+                "cancellation_requested": [],
+                "skipped": [],
+            }
+
+        graph = self.graph_for_mission(mission_id, task_db)
+        nodes = {str(node["id"]): node for node in graph.get("nodes", [])}
+        requested = list(task_ids) if task_ids is not None else [
+            node_id for node_id, node in nodes.items()
+            if node.get("status") in {"queued", "blocked", "running"}
+        ]
+        cancelled: list[str] = []
+        cancellation_requested: list[str] = []
+        skipped: list[dict[str, Any]] = []
+        path = Path(task_db)
+
+        if not path.exists():
+            return {
+                "mission_id": mission_id,
+                "status": mission["status"],
+                "cancelled": [],
+                "cancellation_requested": [],
+                "skipped": [{"reason": "task_db_missing"}],
+            }
+
+        try:
+            conn = sqlite3.connect(path)
+            conn.row_factory = sqlite3.Row
+            now = now_iso()
+            for task_id in requested:
+                node = nodes.get(str(task_id))
+                if not node:
+                    skipped.append({"task_id": task_id, "reason": "not_in_mission"})
+                    continue
+                current_status = str(node.get("status"))
+                row = conn.execute(
+                    "SELECT payload FROM tasks WHERE id=?",
+                    (task_id,),
+                ).fetchone()
+                if not row:
+                    skipped.append({"task_id": task_id, "reason": "task_missing"})
+                    continue
+
+                payload = json.loads(row["payload"] or "{}")
+                payload["_cancel_reason"] = reason
+                payload["_cancel_requested_by"] = "operator"
+
+                if current_status in {"queued", "blocked"}:
+                    payload["cancelled"] = True
+                    payload["cancelled_by"] = "operator"
+                    conn.execute(
+                        "UPDATE tasks SET status='cancelled', payload=?, updated_at=? WHERE id=?",
+                        (json.dumps(payload, ensure_ascii=False), now, task_id),
+                    )
+                    conn.execute(
+                        "INSERT INTO events(task_id,kind,payload,created_at) VALUES(?,?,?,?)",
+                        (
+                            task_id,
+                            "task.cancelled",
+                            json.dumps({"mission_id": mission_id, "reason": reason}),
+                            now,
+                        ),
+                    )
+                    cancelled.append(task_id)
+                    self.add_timeline_event(
+                        mission_id,
+                        "mission.task_cancelled",
+                        {"reason": reason, "cancelled_by": "operator"},
+                        task_id=task_id,
+                        status="cancelled",
+                        created_at=now,
+                    )
+                elif current_status == "running":
+                    payload["_cancel_requested"] = True
+                    conn.execute(
+                        "UPDATE tasks SET payload=?, updated_at=? WHERE id=?",
+                        (json.dumps(payload, ensure_ascii=False), now, task_id),
+                    )
+                    conn.execute(
+                        "INSERT INTO events(task_id,kind,payload,created_at) VALUES(?,?,?,?)",
+                        (
+                            task_id,
+                            "task.cancel_requested",
+                            json.dumps({
+                                "mission_id": mission_id,
+                                "reason": reason,
+                                "graceful": True,
+                            }),
+                            now,
+                        ),
+                    )
+                    cancellation_requested.append(task_id)
+                    self.add_timeline_event(
+                        mission_id,
+                        "mission.cancel_requested",
+                        {"reason": reason, "graceful": True},
+                        task_id=task_id,
+                        status="running",
+                        created_at=now,
+                    )
+                else:
+                    skipped.append({
+                        "task_id": task_id,
+                        "reason": "not_cancellable",
+                        "status": current_status,
+                    })
+            conn.commit()
+            conn.close()
+        except (sqlite3.Error, ValueError, TypeError) as exc:
+            return {
+                "mission_id": mission_id,
+                "status": mission["status"],
+                "cancelled": cancelled,
+                "cancellation_requested": cancellation_requested,
+                "skipped": skipped + [{"reason": "cancel_failed", "error": str(exc)}],
+            }
+
+        self.reconcile(task_db)
+        refreshed = self.get(mission_id) or mission
+        if cancelled or cancellation_requested:
+            self.add_timeline_event(
+                mission_id,
+                "mission.cancel_completed",
+                {
+                    "cancelled_task_ids": cancelled,
+                    "cancellation_requested_task_ids": cancellation_requested,
+                    "skipped": skipped,
+                },
+                status=refreshed["status"],
+            )
+        return {
+            "mission_id": mission_id,
+            "status": refreshed["status"],
+            "cancelled": cancelled,
+            "cancellation_requested": cancellation_requested,
+            "skipped": skipped,
+        }
+
     def reconcile(self, task_db: str | Path) -> dict[str, int]:
         """Reconcile durable mission rows with the authoritative task graph."""
         rows = self.db.execute("SELECT * FROM missions ORDER BY updated_at ASC").fetchall()
@@ -470,6 +620,7 @@ class MissionStateStore:
             "blocked": statuses.count("blocked"),
             "succeeded": statuses.count("succeeded"),
             "failed": statuses.count("failed"),
+            "cancelled": statuses.count("cancelled"),
         }
         return {
             "mission_id": mission_id,
@@ -499,6 +650,8 @@ class MissionStateStore:
         counts = dict(graph.get("counts") or {})
         failed = int(counts.get("failed", 0))
         blocked = int(counts.get("blocked", 0))
+        running = int(counts.get("running", 0))
+        queued = int(counts.get("queued", 0))
         actions = [
             {
                 "action": "approve",
@@ -519,6 +672,21 @@ class MissionStateStore:
                     if node.get("status") == "failed"
                 ],
                 "reason": "Failed tasks can be explicitly resumed; policy gates still apply." if failed else "No failed tasks.",
+            },
+            {
+                "action": "cancel",
+                "enabled": (queued + blocked + running) > 0,
+                "task_ids": [
+                    str(node["id"])
+                    for node in graph.get("nodes", [])
+                    if node.get("status") in {"queued", "blocked", "running"}
+                ],
+                "reason": (
+                    "Queued/blocked tasks cancel immediately; running tasks receive a "
+                    "graceful cancellation request."
+                    if (queued + blocked + running) > 0
+                    else "No active tasks can be cancelled."
+                ),
             },
             {
                 "action": "refresh",
@@ -642,6 +810,8 @@ class MissionStateStore:
             return "blocked"
         if "failed" in observed:
             return "failed"
-        if observed and observed.issubset({"succeeded"}):
+        if observed.issubset({"succeeded", "cancelled"}):
+            if "cancelled" in observed:
+                return "cancelled"
             return "succeeded"
         return fallback
