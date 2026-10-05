@@ -18,6 +18,18 @@ button:hover{background:#1c232b}.conv{width:100%;text-align:left;margin:6px 0}
 textarea{width:100%;resize:none;background:#0f1419;color:#eef2f5;border:1px solid #29313a;border-radius:12px;padding:14px;font:inherit}
 footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;display:flex;justify-content:flex-end}
 .small{font-size:12px;color:#89939e}.title{font-weight:700}.status{font-size:12px;color:#8de1b0}
+
+.control{border-bottom:1px solid #20252b;padding:14px 20px;background:#0d1116}
+.control[hidden]{display:none}.control-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.control-goal{font-weight:700}.control-status{font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.control-grid{display:grid;grid-template-columns:repeat(5,minmax(80px,1fr));gap:8px;margin-top:10px}
+.metric{padding:8px 10px;border:1px solid #242b33;border-radius:9px;background:#10151b}.metric b{display:block;font-size:16px}.metric span{font-size:11px;color:#89939e}
+.control-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.control-actions button[disabled]{opacity:.4;cursor:not-allowed}
+.timeline{margin-top:10px;display:grid;gap:6px;max-height:180px;overflow:auto}
+.timeline-item{display:flex;gap:8px;align-items:baseline;font-size:12px;padding:7px 9px;border:1px solid #20262e;border-radius:8px}
+.timeline-item .kind{font-weight:700}.timeline-item .time{color:#697581;white-space:nowrap}
+.notice{margin-top:8px;padding:8px 10px;border:1px solid #3a2f1f;border-radius:8px;background:#15120e;color:#d8c08b;font-size:12px}
+@media(max-width:900px){.control-grid{grid-template-columns:repeat(3,minmax(80px,1fr))}}
 </style>
 </head>
 <body>
@@ -29,6 +41,19 @@ footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;displ
 </aside>
 <main>
 <header><div><b>OTH Console</b><div class="small">Chat is an interface. OTH state lives on your machine.</div></div><div id="status" class="status">checking…</div></header>
+<section id="control" class="control" hidden>
+  <div class="control-head">
+    <div>
+      <div id="missionGoal" class="control-goal"></div>
+      <div id="missionMeta" class="small"></div>
+    </div>
+    <div id="missionStatus" class="control-status status"></div>
+  </div>
+  <div id="missionMetrics" class="control-grid"></div>
+  <div id="missionActions" class="control-actions"></div>
+  <div id="missionNotice"></div>
+  <div id="missionTimeline" class="timeline"></div>
+</section>
 <section id="messages"></section>
 <footer>
 <textarea id="input" rows="3" placeholder="Give OTH a goal…"></textarea>
@@ -37,57 +62,204 @@ footer{padding:16px 20px;border-top:1px solid #20252b}.send{margin-top:8px;displ
 </main>
 <script>
 let current=null;
+let currentMissionId=null;
+let controlPoll=null;
+
 const $=s=>document.querySelector(s);
-async function api(url,opt){return (await fetch(url,opt)).json()}
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
+async function api(url,opt){
+  const response=await fetch(url,opt);
+  return response.json();
+}
+
 async function loadConvs(){
-  const r=await api('/api/conversations'); const box=$('#convs'); box.innerHTML='';
-  r.items.forEach(c=>{const b=document.createElement('button'); b.className='conv'; b.textContent=c.title; b.onclick=()=>openConv(c.id); box.appendChild(b)})
+  const r=await api('/api/conversations');
+  const box=$('#convs'); box.innerHTML='';
+  r.items.forEach(c=>{
+    const b=document.createElement('button');
+    b.className='conv';
+    b.textContent=c.title;
+    b.onclick=()=>openConv(c.id);
+    box.appendChild(b);
+  });
 }
-async function openConv(id){
-  current=id; const r=await api('/api/conversations/'+id+'/messages'); const box=$('#messages'); box.innerHTML='';
-  r.items.forEach(m=>addMsg(m.role,m.content)); box.scrollTop=box.scrollHeight;
+
+function addMsg(role,text){
+  const d=document.createElement('div');
+  d.className='msg '+role;
+  d.textContent=text;
+  $('#messages').appendChild(d);
+  return d;
 }
-function addMsg(role,text){const d=document.createElement('div');d.className='msg '+role;d.textContent=text;$('#messages').appendChild(d);return d}
-async function watchMission(rootIds){
-  const watched=[...rootIds];
-  const started=Date.now();
-  while(Date.now()-started < 30*60*1000){
-    const graphs=await Promise.all(watched.map(id=>api('/api/tasks/'+id+'/graph')));
-    const nodes=graphs.flatMap(graph=>graph.nodes || []);
-    const allTerminal=nodes.length>0 && nodes.every(node=>['succeeded','failed','blocked'].includes(node.status));
-    const counts=nodes.reduce((acc,node)=>{acc[node.status]=(acc[node.status]||0)+1;return acc},{});
-    $('#status').textContent=nodes.length+' tasks · '+(counts.succeeded||0)+' done · '+(counts.running||0)+' running · '+(counts.queued||0)+' queued · '+(counts.failed||0)+' failed · '+(counts.blocked||0)+' blocked';
-    if(allTerminal){
-      const failures=nodes.filter(node=>node.status==='failed' || node.status==='blocked');
-      const summary=failures.length
-        ? failures.map(node=>node.status.toUpperCase()+': '+node.capability+' / '+node.action).join('\n')
-        : 'Mission graph completed: '+nodes.length+' task(s) succeeded.';
-      addMsg('assistant',summary);
-      $('#messages').scrollTop=$('#messages').scrollHeight;
-      return;
-    }
-    await new Promise(resolve=>setTimeout(resolve,1500));
+
+function stopControlPolling(){
+  if(controlPoll){clearTimeout(controlPoll);controlPoll=null;}
+}
+
+function metric(label,value){
+  const d=document.createElement('div');
+  d.className='metric';
+  const b=document.createElement('b'); b.textContent=value;
+  const s=document.createElement('span'); s.textContent=label;
+  d.append(b,s);
+  return d;
+}
+
+function renderControl(data){
+  const panel=$('#control');
+  if(!data || !data.mission){panel.hidden=true;return;}
+  panel.hidden=false;
+  const m=data.mission, g=data.graph||{}, counts=g.counts||{};
+  $('#missionGoal').textContent=m.goal || 'Mission';
+  $('#missionMeta').textContent='Mission '+m.id+' · latest task '+(m.latest_task_id||'none');
+  $('#missionStatus').textContent=m.status;
+  $('#status').textContent='Mission '+m.status+' · '+(counts.total||0)+' tasks';
+
+  const metrics=$('#missionMetrics'); metrics.innerHTML='';
+  [['Total',counts.total||0],['Queued',counts.queued||0],['Running',counts.running||0],['Blocked',counts.blocked||0],['Failed',counts.failed||0]].forEach(([k,v])=>metrics.appendChild(metric(k,v)));
+
+  const actions=$('#missionActions'); actions.innerHTML='';
+  (data.actions||[]).filter(item=>item.enabled).forEach(item=>{
+    const b=document.createElement('button');
+    b.textContent=item.action==='approve'?'Approve blocked':item.action==='resume'?'Resume failed':'Refresh';
+    b.onclick=()=>runMissionAction(item.action);
+    actions.appendChild(b);
+  });
+
+  const notice=$('#missionNotice'); notice.innerHTML='';
+  const timeline=$('#missionTimeline'); timeline.innerHTML='';
+  const items=(data.timeline||[]).slice(-8).reverse();
+  items.forEach(item=>{
+    const row=document.createElement('div'); row.className='timeline-item';
+    const kind=document.createElement('span'); kind.className='kind'; kind.textContent=item.kind;
+    const task=document.createElement('span'); task.textContent=item.task_id ? item.task_id.slice(0,8) : 'mission';
+    const time=document.createElement('span'); time.className='time'; time.textContent=item.created_at||'';
+    row.append(kind,task,time); timeline.appendChild(row);
+  });
+}
+
+async function refreshMissionControl(missionId){
+  if(!missionId)return null;
+  const data=await api('/api/missions/'+missionId+'/control');
+  if(data.error){return null;}
+  currentMissionId=missionId;
+  renderControl(data);
+  return data;
+}
+
+async function runMissionAction(action, options={}){
+  if(!currentMissionId)return;
+  const body={action,...options};
+  const data=await api('/api/missions/'+currentMissionId+'/control',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  });
+  if(data.control)renderControl(data.control);
+
+  const result=data.result||{};
+  if(action==='resume' && result.blocked?.length){
+    const notice=$('#missionNotice');
+    notice.innerHTML='';
+    const row=document.createElement('div'); row.className='notice';
+    row.textContent=result.blocked.length+' failed task(s) remain approval-gated.';
+    const approve=document.createElement('button');
+    approve.textContent='Resume blocked with operator approval';
+    approve.onclick=()=>runMissionAction('resume',{
+      task_ids:result.blocked.map(item=>item.task_id),
+      approve_external:true
+    });
+    row.append(' ',approve);
+    notice.appendChild(row);
   }
-  addMsg('assistant','Mission is still running. OTH continues execution through the daemon; this console will not invent completion.');
-  $('#messages').scrollTop=$('#messages').scrollHeight;
 }
+
+async function loadMissionForConversation(conversationId){
+  const r=await api('/api/conversations/'+conversationId+'/mission');
+  if(r.items?.length){
+    currentMissionId=r.items[0].id;
+    await refreshMissionControl(currentMissionId);
+  }else{
+    currentMissionId=null;
+    $('#control').hidden=true;
+  }
+}
+
+async function watchMission(missionId){
+  stopControlPolling();
+  const started=Date.now();
+  async function tick(){
+    const data=await refreshMissionControl(missionId);
+    if(!data || Date.now()-started>=30*60*1000)return;
+    const status=data.mission?.status;
+    if(['succeeded','failed'].includes(status))return;
+    controlPoll=setTimeout(tick,1500);
+  }
+  tick();
+}
+
+async function openConv(id){
+  stopControlPolling();
+  current=id;
+  const r=await api('/api/conversations/'+id+'/messages');
+  const box=$('#messages'); box.innerHTML='';
+  r.items.forEach(m=>addMsg(m.role,m.content));
+  box.scrollTop=box.scrollHeight;
+  await loadMissionForConversation(id);
+}
+
 async function ensureConv(){
   if(current)return;
-  const r=await api('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'OTH Mission'})});
-  current=r.id; await loadConvs();
+  const r=await api('/api/conversations',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({title:'OTH Mission'})
+  });
+  current=r.id;
+  await loadConvs();
 }
+
 async function send(){
-  const input=$('#input'); const text=input.value.trim(); if(!text)return;
-  await ensureConv(); addMsg('user',text); input.value='';
-  const r=await api('/api/conversations/'+current+'/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:text})});
-  addMsg('assistant',r.content); $('#messages').scrollTop=$('#messages').scrollHeight;
-  if(r.provider==='oth-kernel' && r.mission?.root_task_ids?.length){
-    watchMission(r.mission.root_task_ids);
+  const input=$('#input');
+  const text=input.value.trim();
+  if(!text)return;
+  await ensureConv();
+  addMsg('user',text);
+  input.value='';
+  const r=await api('/api/conversations/'+current+'/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({content:text})
+  });
+  addMsg('assistant',r.content);
+  $('#messages').scrollTop=$('#messages').scrollHeight;
+  if(r.provider==='oth-kernel' && r.mission?.mission_id){
+    await refreshMissionControl(r.mission.mission_id);
+    watchMission(r.mission.mission_id);
   }
 }
-$('#send').onclick=send; $('#input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
-$('#new').onclick=async()=>{current=null;$('#messages').innerHTML='';await ensureConv();};
-(async()=>{const s=await api('/api/status');$('#status').textContent=s.console+' · '+s.stats.messages+' stored messages';await loadConvs();const r=await api('/api/conversations');if(r.items.length)openConv(r.items[0].id);})();
+
+$('#send').onclick=send;
+$('#input').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}
+});
+$('#new').onclick=async()=>{
+  stopControlPolling();
+  current=null;
+  currentMissionId=null;
+  $('#messages').innerHTML='';
+  $('#control').hidden=true;
+  await ensureConv();
+};
+
+(async()=>{
+  const s=await api('/api/status');
+  $('#status').textContent=s.console+' · '+s.stats.messages+' stored messages';
+  await loadConvs();
+  const r=await api('/api/conversations');
+  if(r.items.length)await openConv(r.items[0].id);
+})();
 </script>
 </body>
 </html>
