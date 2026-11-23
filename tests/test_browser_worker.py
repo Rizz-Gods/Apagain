@@ -22,7 +22,12 @@ class BrowserWorkerTests(unittest.TestCase):
             stdout="ok",
             stderr="",
         )
-        with patch("oth.workers.browser.subprocess.run", return_value=fake) as run:
+        # The test verifies command construction, not whether Chrome is
+        # installed on the machine running the test.
+        with (
+            patch("oth.workers.browser.Path.exists", return_value=True),
+            patch("oth.workers.browser.subprocess.run", return_value=fake) as run,
+        ):
             result = worker.execute("command", {
                 "command": "open",
                 "args": ["https://example.com"],
