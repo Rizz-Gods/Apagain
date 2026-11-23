@@ -11,8 +11,9 @@ permissions:
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    name: Python ${{ matrix.python-version }} (Windows)
+    # OTH currently uses Windows DPAPI for encrypted credential storage.
+    runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
